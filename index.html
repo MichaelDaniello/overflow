@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>OVERFL0W // TERMINAL</title>
+  <meta name="description" content="Neural uplink established. Welcome to the grid.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:wght@400;700;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+  <div id="crt">
+    <div class="scanlines"></div>
+    <div class="screen-curve"></div>
+
+    <div id="topbar">
+      <span class="left">■ NODE.77.42</span>
+      <span class="center">OVERFL0W</span>
+      <span class="right" id="clock">00:00:00</span>
+    </div>
+
+    <div id="status-bar">
+      <span class="online">● UPLINK</span>
+      <span>ENC: AES-256-GCM</span>
+      <span>NET: NIGHTCITY_PROXY</span>
+      <span title="Intrusion Countermeasure Electronics">ICE: <span style="color:var(--green)">NONE</span></span>
+      <span id="uptime">SES: 0s</span>
+    </div>
+
+    <div id="terminal-wrap">
+      <div id="output"></div>
+      <div id="input-line">
+        <span id="prompt-text"><span class="prompt-prefix">netrunner@overfl0w:~$</span>&nbsp;</span>
+        <div id="input-wrap">
+          <span id="input-mirror"></span><span id="ghost-text"></span><span class="cursor-blink">█</span>
+          <input
+            type="text"
+            id="cmd-input"
+            inputmode="text"
+            autocomplete="off"
+            autocorrect="off"
+            autocapitalize="off"
+            spellcheck="false"
+            autofocus
+            aria-label="Terminal input"
+          >
+        </div>
+      </div>
+    </div>
+
+    <div id="glitch-overlay" class="hidden">
+      <div class="glitch-text">BREACH DETECTED</div>
+      <div class="sub">COUNTER-ICE DEPLOYED — TRACE INITIATED</div>
+    </div>
+
+    <footer id="social-footer">
+      <span class="sep">═══</span>
+      <a href="https://www.linkedin.com/in/michaeldaniello/" target="_blank" rel="noopener noreferrer">LinkedIn</a>
+      <span class="dot">·</span>
+      <a href="https://github.com/MichaelDaniello" target="_blank" rel="noopener noreferrer">GitHub</a>
+      <span class="sep">═══</span>
+    </footer>
+  </div>
+
+  <script src="js/terminal.js"></script>
+</body>
+</html>
