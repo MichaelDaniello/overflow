@@ -345,6 +345,16 @@ button.act:disabled { opacity: 0.4; cursor: not-allowed; box-shadow: none; }
   letter-spacing: 0.5px;
 }
 #colophon a { color: var(--yellow-d); }
+#colophon .sep { opacity: 0.4; margin: 0 4px; }
+#back-link {
+  color: var(--black);
+  background: var(--yellow);
+  text-decoration: none;
+  font-weight: 700;
+  letter-spacing: 1px;
+  padding: 2px 8px;
+}
+#back-link:hover { background: var(--pink); color: var(--paper); }
 
 /* utility */
 .hidden { display: none !important; }
