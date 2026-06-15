@@ -320,6 +320,12 @@ button.act:disabled { opacity: 0.4; cursor: not-allowed; box-shadow: none; }
 #overlay-title.death { background: var(--blood); color: var(--paper); }
 #overlay-title.level { background: var(--pink); color: var(--paper); }
 #overlay-body { font-size: 16px; line-height: 1.5; margin-bottom: 18px; }
+.death-skull {
+  display: block;
+  width: 160px;
+  margin: -6px auto 12px;
+  filter: drop-shadow(3px 3px 0 var(--pink));
+}
 #overlay-body p { margin: 0 0 10px; }
 #overlay-body .flavor { font-family: 'IM Fell English', serif; font-style: italic; }
 #overlay-actions { display: flex; flex-wrap: wrap; gap: 10px; }
