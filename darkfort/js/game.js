@@ -847,7 +847,8 @@
     render();
     heading('DEATH');
     logLine(msg);
-    openOverlay('YOU DIED', `<p>${msg}</p>
+    openOverlay('YOU DIED', `<img class="death-skull" src="assets/skull.png" alt="">
+      <p>${msg}</p>
       <p>Rooms explored: <b>${G.roomsExplored}</b> · Points: <b>${G.points}</b> · Silver: <b>${G.silver}</b> · Catacomb: <b>${G.catacomb}</b></p>
       <p class="flavor">Everything you knew blackens and burns.</p>`, () => {}, 'death');
     setOverlayActions([{ label: '☠ Roll a new rogue', cls: 'primary', fn: () => { closeOverlay(); startTitle(); } }]);

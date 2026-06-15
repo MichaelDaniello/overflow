@@ -63,7 +63,15 @@ npm run gallery   # render gallery PNGs of all shapes & encounters (needs canvas
 `canvas` is a **dev-only** dependency used purely for offline PNG rendering of
 the art; the game in the browser uses the native canvas and needs nothing.
 
+## Art credit
+
+The skull (`assets/skull.png`, used on the title, the skeleton, the
+necro-sorcerer and the death screen) is the original ink illustration from the
+official Dark Fort sheet. Everything else on the canvas — the room shapes,
+doors, other monsters and props — is generated procedurally at runtime.
+
 ---
 
-*Dark Fort and Mörk Borg © Ockult Örtmästare Games & Stockholm Kartell. This is
-an unofficial fan implementation made for play and learning.*
+*Dark Fort and Mörk Borg © Ockult Örtmästare Games & Stockholm Kartell, including
+the skull artwork. This is an unofficial fan implementation made for play and
+learning.*
