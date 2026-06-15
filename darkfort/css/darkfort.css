@@ -362,6 +362,34 @@ button.act:disabled { opacity: 0.4; cursor: not-allowed; box-shadow: none; }
 }
 #back-link:hover { background: var(--pink); color: var(--paper); }
 
+/* ── Dungeon map ──────────────────────────────────────── */
+#map-frame {
+  border: 5px solid var(--black);
+  border-top: 0;
+  background: var(--ink);
+  box-shadow: 10px 10px 0 var(--pink);
+  overflow: hidden;
+  position: relative;
+}
+#map-label {
+  font-family: 'Anton', sans-serif;
+  font-size: 10px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--yellow);
+  background: var(--black);
+  display: inline-block;
+  padding: 3px 12px 2px;
+  transform: skewX(-4deg);
+  margin: 8px 8px 3px 10px;
+}
+#map-canvas {
+  display: block;
+  width: 100%;
+  height: auto;
+  cursor: pointer;
+}
+
 /* utility */
 .hidden { display: none !important; }
 .shake { animation: shake 0.4s; }

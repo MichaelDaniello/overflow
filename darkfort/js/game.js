@@ -1,15 +1,11 @@
 /* ============================================================
    DARK FORT — GAME ENGINE
-   A faithful solo play of the Mörk Borg micro-RPG "Dark Fort".
-   The dice drive both the rules AND the picture: every room's
-   2d6 shape + d4 doors + encounter roll is handed to the art
-   engine (art.js) and drawn on the canvas.
    ============================================================ */
 
 (function () {
   'use strict';
 
-  /* ── tiny DOM helpers ─────────────────────────────────── */
+  /* ── DOM helpers ──────────────────────────────────────── */
   const $ = (s) => document.querySelector(s);
   const el = (tag, cls, html) => {
     const n = document.createElement(tag);
@@ -24,6 +20,9 @@
   const actionBox = $('#actions');
   const diceTray  = $('#dice-tray');
   const overlay   = $('#overlay');
+
+  /* ── colour palette (shared with art.js) ─────────────── */
+  const COL = DarkFortArt.COL;
 
   /* ── dice ─────────────────────────────────────────────── */
   const d = (n) => 1 + Math.floor(Math.random() * n);
@@ -50,91 +49,250 @@
       silver: 15 + d(6),
       points: 0,
       roomsExplored: 0,
-      unopenedDoors: 0,
       weapons: [startWeapon],
       weapon: startWeapon,
       attackBonus: 0,
       inv: { armor: 0, potions: 0, ropes: 0, cloaks: 0 },
       scrolls: [],
-      halved: {},                 // monster name -> true
+      halved: {},
       levelList: [1, 2, 3, 4, 5, 6],
-      falseOmen: null,            // chosen room-table result
+      falseOmen: null,
       room: null,
       combat: null,
       aegisUses: 0,
       catacomb: 1,
       over: false,
+      dungeon: { rooms: [], currentId: -1, nextId: 0 },
     };
-    // starting item (table B)
     grantStartItem(d(4));
   }
 
-  function weaponByRoll(r) {
-    switch (r) {
-      case 1: return { name: 'Warhammer', dmg: dmg(6),    atk: 0 };
-      case 2: return { name: 'Dagger',    dmg: dmg(4),    atk: 1 };
-      case 3: return { name: 'Sword',     dmg: dmg(6),    atk: 1 };
-      default:return { name: 'Flail',     dmg: dmg(6, 1), atk: 0 };
+  /* ── dungeon graph ────────────────────────────────────── */
+  function dungeonRoom(id) {
+    return G.dungeon.rooms.find((r) => r.id === id) || null;
+  }
+
+  function makeDungeonRoom(spec, numExits, fromId, fromExitIdx) {
+    const id = G.dungeon.nextId++;
+    const pos = placeOnMap(fromId, fromExitIdx);
+    const room = {
+      id,
+      spec,
+      shape: spec.shape,
+      cleared: false,
+      exits: Array(numExits).fill(null), // null = unexplored, number = target room id
+      fromId: fromId >= 0 ? fromId : -1,
+      fromExitIdx: fromExitIdx >= 0 ? fromExitIdx : -1,
+      mapX: pos.x,
+      mapY: pos.y,
+    };
+    G.dungeon.rooms.push(room);
+    if (fromId >= 0 && fromExitIdx >= 0) {
+      const parent = dungeonRoom(fromId);
+      if (parent) parent.exits[fromExitIdx] = id;
     }
+    G.dungeon.currentId = id;
+    return room;
   }
 
-  function grantStartItem(r) {
-    switch (r) {
-      case 1: G.inv.armor++;   break;
-      case 2: G.inv.potions++; break;
-      case 3: G.scrolls.push(makeScroll(1)); break; // summon weak daemon
-      default: G.inv.cloaks++; break;
+  function placeOnMap(fromId, fromExitIdx) {
+    if (fromId < 0) return { x: 0, y: 0 };
+    const parent = dungeonRoom(fromId);
+    if (!parent) return { x: 0, y: 0 };
+    const DIRS = [[0, 1], [1, 0], [0, -1], [-1, 0]];
+    const off = fromExitIdx || 0;
+    for (let attempt = 0; attempt < 4; attempt++) {
+      const [dx, dy] = DIRS[(off + attempt) % 4];
+      const nx = parent.mapX + dx, ny = parent.mapY + dy;
+      if (!G.dungeon.rooms.some((r) => r.mapX === nx && r.mapY === ny)) {
+        return { x: nx, y: ny };
+      }
     }
-  }
-
-  function makeScroll(r) {
-    switch (r) {
-      case 1: return { key: 'summon', name: 'Summon Weak Daemon', uses: 1, eff: 'd6 dmg' };
-      case 2: return { key: 'palms',  name: 'Palms Open the Southern Gate', uses: d(4), eff: 'd6+1 dmg' };
-      case 3: return { key: 'aegis',  name: 'Aegis of Sorrow', uses: d(4), eff: '-d4 dmg' };
-      default:return { key: 'omen',   name: 'False Omen', uses: 1, eff: 'bend fate' };
+    for (let dist = 2; dist <= 8; dist++) {
+      for (const [dx, dy] of DIRS) {
+        const nx = parent.mapX + dx * dist, ny = parent.mapY + dy * dist;
+        if (!G.dungeon.rooms.some((r) => r.mapX === nx && r.mapY === ny)) {
+          return { x: nx, y: ny };
+        }
+      }
     }
+    return { x: G.dungeon.rooms.length, y: 0 };
   }
 
-  function addItem(r, silent) {
-    switch (r) {
-      case 1: { const w = weaponByRoll(d(4)); G.weapons.push(w);
-                if (!silent) logLine(`A <b>${w.name}</b> (${dmgLabel(w.dmg)}${w.atk?` /+${w.atk} atk`:''}) lies among the filth. <i>Equip it from your PACK.</i>`); return; }
-      case 2: G.inv.potions++; if (!silent) logLine('A <span class="good">potion</span> (heal d6 hp).'); return;
-      case 3: G.inv.ropes++;   if (!silent) logLine('A coil of <b>rope</b> (+1 on trap rolls).'); return;
-      case 4: { const sc = makeScroll(d(4)); G.scrolls.push(sc);
-                if (!silent) logLine(`A <span class="good">scroll</span>: <b>${sc.name}</b> (${sc.eff}${sc.uses>1?`, ${sc.uses} uses`:''}).`); return; }
-      case 5: G.inv.armor++;   if (!silent) logLine('A suit of <b>armor</b> (-d4 damage).'); return;
-      default: G.inv.cloaks++; if (!silent) logLine('A <span class="good">cloak of invisibility</span>.'); return;
+  /* ── map canvas ───────────────────────────────────────── */
+  const MAP_CELL = 38;
+  const MAP_ROOM = 22;
+
+  function drawMap() {
+    const mc = $('#map-canvas');
+    if (!mc) return;
+    const ctx = mc.getContext('2d');
+    if (!ctx) return;
+
+    if (!G || !G.dungeon || !G.dungeon.rooms.length) {
+      mc.width = 640; mc.height = 160;
+      ctx.fillStyle = COL.ink;
+      ctx.fillRect(0, 0, 640, 160);
+      // label
+      ctx.fillStyle = '#3a3830';
+      ctx.font = 'bold 10px Anton, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('MAP WILL BUILD AS YOU EXPLORE', 320, 80);
+      ctx.textBaseline = 'alphabetic';
+      return;
     }
+
+    const rooms = G.dungeon.rooms;
+    const xs = rooms.map((r) => r.mapX);
+    const ys = rooms.map((r) => r.mapY);
+    const minX = Math.min(...xs), maxX = Math.max(...xs);
+    const minY = Math.min(...ys), maxY = Math.max(...ys);
+
+    const PAD = 36;
+    const W = mc.width  = Math.max(640, (maxX - minX + 3) * MAP_CELL + PAD * 2);
+    const H = mc.height = Math.max(160, (maxY - minY + 3) * MAP_CELL + PAD * 2);
+
+    ctx.fillStyle = COL.ink;
+    ctx.fillRect(0, 0, W, H);
+
+    // subtle rock hatch
+    ctx.strokeStyle = 'rgba(0,0,0,0.3)';
+    ctx.lineWidth = 1;
+    for (let i = 0; i < 40; i++) {
+      const x = (i * 73) % W, y = (i * 57) % H, len = 8 + (i * 13) % 20;
+      ctx.beginPath();
+      ctx.moveTo(x, y);
+      ctx.lineTo(x + Math.cos(i) * len, y + Math.sin(i) * len);
+      ctx.stroke();
+    }
+
+    const toX = (gx) => (gx - minX + 1) * MAP_CELL + PAD;
+    const toY = (gy) => (gy - minY + 1) * MAP_CELL + PAD;
+
+    // draw connection lines first (under rooms)
+    rooms.forEach((room) => {
+      room.exits.forEach((toId) => {
+        if (toId === null) return;
+        const target = dungeonRoom(toId);
+        if (!target) return;
+        ctx.strokeStyle = '#504a38';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(toX(room.mapX), toY(room.mapY));
+        ctx.lineTo(toX(target.mapX), toY(target.mapY));
+        ctx.stroke();
+      });
+    });
+
+    // draw unexplored-exit stubs from cleared rooms
+    ctx.setLineDash([3, 4]);
+    ctx.lineWidth = 1.5;
+    rooms.forEach((room) => {
+      if (!room.cleared) return;
+      const unexplored = room.exits.filter((e) => e === null).length;
+      if (!unexplored) return;
+      const rx = toX(room.mapX), ry = toY(room.mapY);
+
+      // gather directions already used by explored connections
+      const usedAngles = new Set();
+      room.exits.forEach((toId) => {
+        if (toId !== null) {
+          const t = dungeonRoom(toId);
+          if (t) {
+            const a = Math.round(Math.atan2(t.mapY - room.mapY, t.mapX - room.mapX) * 4 / Math.PI) & 7;
+            usedAngles.add(a);
+          }
+        }
+      });
+      if (room.fromId >= 0) {
+        const p = dungeonRoom(room.fromId);
+        if (p) {
+          const a = Math.round(Math.atan2(p.mapY - room.mapY, p.mapX - room.mapX) * 4 / Math.PI) & 7;
+          usedAngles.add(a);
+        }
+      }
+
+      const SLOT_ANGLES = [0, 4, 2, 6, 1, 3, 5, 7];
+      let drawn = 0;
+      for (const slot of SLOT_ANGLES) {
+        if (drawn >= unexplored) break;
+        if (usedAngles.has(slot)) continue;
+        const angle = slot * Math.PI / 4;
+        const isCurrent = room.id === G.dungeon.currentId;
+        ctx.strokeStyle = isCurrent ? COL.yellow + '88' : '#3a3428';
+        ctx.beginPath();
+        ctx.moveTo(rx + Math.cos(angle) * (MAP_ROOM / 2 + 2), ry + Math.sin(angle) * (MAP_ROOM / 2 + 2));
+        ctx.lineTo(rx + Math.cos(angle) * (MAP_ROOM / 2 + 12), ry + Math.sin(angle) * (MAP_ROOM / 2 + 12));
+        ctx.stroke();
+        drawn++;
+      }
+    });
+    ctx.setLineDash([]);
+
+    // draw rooms
+    rooms.forEach((room) => {
+      const rx = toX(room.mapX), ry = toY(room.mapY);
+      const isCurrent = room.id === G.dungeon.currentId;
+      const isEntrance = room.id === 0;
+      const half = MAP_ROOM / 2;
+
+      ctx.fillStyle = isCurrent ? COL.yellow : (room.cleared ? '#3a3830' : '#1e1e18');
+      ctx.strokeStyle = isCurrent ? COL.yellow : (isEntrance ? COL.pink : '#605a44');
+      ctx.lineWidth = isCurrent ? 3 : (isEntrance ? 2 : 1.5);
+      ctx.fillRect(rx - half, ry - half, MAP_ROOM, MAP_ROOM);
+      ctx.strokeRect(rx - half, ry - half, MAP_ROOM, MAP_ROOM);
+
+      ctx.fillStyle = isCurrent ? COL.black : (room.cleared ? '#a09878' : '#484038');
+      ctx.font = 'bold 8px Anton, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(isEntrance ? 'E' : String(room.id), rx, ry);
+      ctx.textBaseline = 'alphabetic';
+    });
   }
 
-  /* ── monsters ─────────────────────────────────────────── */
-  function weakMonster() {
-    const r = d(4);
-    if (r === 1) return mk('BLOOD-DRENCHED SKELETON', 'skeleton', 3, dmg(4), 6, { loot: 'dagger' });
-    if (r === 2) return mk('CATACOMB CULTIST',        'cultist',  3, dmg(4), 6, { loot: 'scroll' });
-    if (r === 3) return mk('GOBLIN',                  'goblin',   3, dmg(4), 5, { loot: 'rope'   });
-    return         mk('UNDEAD HOUND',                 'hound',    4, dmg(4), 6, {});
-  }
-  function toughMonster() {
-    const r = d(4);
-    if (r === 1) return mk('NECRO-SORCERER',   'sorcerer', 4, dmg(4),    8,  { tough: true, special: 'sorcerer' });
-    if (r === 2) return mk('SMALL STONE TROLL','troll',    5, dmg(6, 1), 9,  { tough: true, killPoints: 7 });
-    if (r === 3) return mk('MEDUSA',           'medusa',   4, dmg(6),    10, { tough: true, special: 'medusa' });
-    return         mk('RUIN BASILISK',         'basilisk', 4, dmg(6),    11, { tough: true, special: 'basilisk' });
-  }
-  function mk(name, art, points, dspec, hp, extra) {
-    return Object.assign({ name, art, points, dmg: dspec, hp, maxHp: hp, tough: false }, extra);
+  /* ── map click handler ────────────────────────────────── */
+  function initMapClicks() {
+    const mc = $('#map-canvas');
+    if (!mc) return;
+    mc.addEventListener('click', (e) => {
+      if (!G || G.over || G.combat) return;
+      if (overlay && !overlay.classList.contains('hidden')) return;
+      const current = dungeonRoom(G.dungeon.currentId);
+      if (!current || !current.cleared) return;
+
+      const rect = mc.getBoundingClientRect();
+      const cx = (e.clientX - rect.left) * (mc.width / rect.width);
+      const cy = (e.clientY - rect.top)  * (mc.height / rect.height);
+
+      const rooms = G.dungeon.rooms;
+      const xs = rooms.map((r) => r.mapX), ys = rooms.map((r) => r.mapY);
+      const minX = Math.min(...xs);
+      const minY = Math.min(...ys);
+      const PAD = 36;
+      const toX = (gx) => (gx - minX + 1) * MAP_CELL + PAD;
+      const toY = (gy) => (gy - minY + 1) * MAP_CELL + PAD;
+      const HIT = MAP_ROOM / 2 + 6;
+
+      for (const room of rooms) {
+        if (room.id === G.dungeon.currentId) continue;
+        if (Math.abs(cx - toX(room.mapX)) <= HIT && Math.abs(cy - toY(room.mapY)) <= HIT) {
+          // only navigate to directly connected rooms
+          const isChild  = current.exits.includes(room.id);
+          const isParent = room.exits.includes(G.dungeon.currentId) || room.id === current.fromId;
+          if (isChild || isParent) backtrackToRoom(room.id);
+          return;
+        }
+      }
+    });
   }
 
-  /* ════════════════════════════════════════════════════════
-     RENDERING
-     ════════════════════════════════════════════════════════ */
+  /* ── character sheet render ───────────────────────────── */
   function render() {
     if (!G) return;
-    $('#cs-name').textContent  = G.title;
-    $('#stat-hp').textContent  = Math.max(0, G.hp);
+    $('#cs-name').textContent   = G.title;
+    $('#stat-hp').textContent   = Math.max(0, G.hp);
     $('#stat-maxhp').textContent = '/' + G.maxHp;
     $('#stat-silver').textContent = G.silver;
     $('#stat-points').textContent = G.points;
@@ -151,7 +309,7 @@
     if (G.inv.ropes)   p.push(`rope×${G.inv.ropes}`);
     if (G.inv.cloaks)  p.push(`cloak×${G.inv.cloaks}`);
     if (G.weapons.length > 1) p.push(`weapons×${G.weapons.length}`);
-    G.scrolls.forEach((s) => p.push(`<span class="good">${s.name}${s.uses > 1 ? `(${s.uses})` : ''}</span>`));
+    G.scrolls.forEach((s) => p.push(`<span class="good">${s.name}${s.uses > 1 ? ` (${s.uses})` : ''}</span>`));
     return p.length ? p.join(' · ') : '<i>empty</i>';
   }
 
@@ -187,6 +345,7 @@
 
   function drawRoom() {
     DarkFortArt.render(canvas, G.room.spec);
+    drawMap();
   }
 
   function flashHp() {
@@ -198,9 +357,7 @@
     }, 450);
   }
 
-  /* ════════════════════════════════════════════════════════
-     ROOM SHAPES & DOORS
-     ════════════════════════════════════════════════════════ */
+  /* ── room shapes & doors ──────────────────────────────── */
   const SHAPE_2D6 = {
     2: 'Irregular cave', 3: 'Oval', 4: 'Cross-shaped', 5: 'Corridor',
     6: 'Square', 7: 'Square', 8: 'Square', 9: 'Round',
@@ -210,11 +367,69 @@
     const a = d(6), b = d(6);
     return { shape: SHAPE_2D6[a + b], dice: [a, b] };
   }
-  // door table d4: 1 none, 2 one, 3-4 two
   function rollDoors() {
     const r = d(4);
-    const n = r === 1 ? 0 : r === 2 ? 1 : 2;
-    return { n, roll: r };
+    return { n: r === 1 ? 0 : r === 2 ? 1 : 2, roll: r };
+  }
+
+  /* ── weapons ──────────────────────────────────────────── */
+  function weaponByRoll(r) {
+    switch (r) {
+      case 1: return { name: 'Warhammer', dmg: dmg(6),    atk: 0 };
+      case 2: return { name: 'Dagger',    dmg: dmg(4),    atk: 1 };
+      case 3: return { name: 'Sword',     dmg: dmg(6),    atk: 1 };
+      default:return { name: 'Flail',     dmg: dmg(6, 1), atk: 0 };
+    }
+  }
+
+  function grantStartItem(r) {
+    switch (r) {
+      case 1: G.inv.armor++;   break;
+      case 2: G.inv.potions++; break;
+      case 3: G.scrolls.push(makeScroll(1)); break;
+      default: G.inv.cloaks++; break;
+    }
+  }
+
+  function makeScroll(r) {
+    switch (r) {
+      case 1: return { key: 'summon', name: 'Summon Weak Daemon', uses: 1,    eff: 'd6 dmg to one monster' };
+      case 2: return { key: 'palms',  name: 'Palms Open the Southern Gate', uses: d(4), eff: 'd6+1 dmg to one monster' };
+      case 3: return { key: 'aegis',  name: 'Aegis of Sorrow', uses: d(4),   eff: 'absorb d4 dmg per hit' };
+      default:return { key: 'omen',   name: 'False Omen', uses: 1,            eff: 'choose next room result' };
+    }
+  }
+
+  function addItem(r, silent) {
+    switch (r) {
+      case 1: { const w = weaponByRoll(d(4)); G.weapons.push(w);
+                if (!silent) logLine(`A <b>${w.name}</b> (${dmgLabel(w.dmg)}${w.atk ? ` /+${w.atk} atk` : ''}) lies among the filth. <i>Equip it from your PACK.</i>`); return; }
+      case 2: G.inv.potions++; if (!silent) logLine('A <span class="good">potion</span> (heals d6 hp).'); return;
+      case 3: G.inv.ropes++;   if (!silent) logLine('A coil of <b>rope</b> (+1 on pit trap rolls).'); return;
+      case 4: { const sc = makeScroll(d(4)); G.scrolls.push(sc);
+                if (!silent) logLine(`A <span class="good">scroll</span>: <b>${sc.name}</b> — ${sc.eff}${sc.uses > 1 ? ` (${sc.uses} uses)` : ''}.`); return; }
+      case 5: G.inv.armor++;   if (!silent) logLine('A suit of <b>armor</b> (absorbs d4 damage per hit).'); return;
+      default: G.inv.cloaks++; if (!silent) logLine('A <span class="good">cloak of invisibility</span> (escape combat unharmed).'); return;
+    }
+  }
+
+  /* ── monsters ─────────────────────────────────────────── */
+  function weakMonster() {
+    const r = d(4);
+    if (r === 1) return mk('BLOOD-DRENCHED SKELETON', 'skeleton', 3, dmg(4), 6, { loot: 'dagger' });
+    if (r === 2) return mk('CATACOMB CULTIST',        'cultist',  3, dmg(4), 6, { loot: 'scroll' });
+    if (r === 3) return mk('GOBLIN',                  'goblin',   3, dmg(4), 5, { loot: 'rope'   });
+    return         mk('UNDEAD HOUND',                 'hound',    4, dmg(4), 6, {});
+  }
+  function toughMonster() {
+    const r = d(4);
+    if (r === 1) return mk('NECRO-SORCERER',    'sorcerer', 4, dmg(4),    8,  { tough: true, special: 'sorcerer' });
+    if (r === 2) return mk('SMALL STONE TROLL', 'troll',    5, dmg(6, 1), 9,  { tough: true, killPoints: 7 });
+    if (r === 3) return mk('MEDUSA',            'medusa',   4, dmg(6),    10, { tough: true, special: 'medusa' });
+    return         mk('RUIN BASILISK',          'basilisk', 4, dmg(6),    11, { tough: true, special: 'basilisk' });
+  }
+  function mk(name, art, points, dspec, hp, extra) {
+    return Object.assign({ name, art, points, dmg: dspec, hp, maxHp: hp, tough: false }, extra);
   }
 
   /* ════════════════════════════════════════════════════════
@@ -227,6 +442,8 @@
     heading('THE CATACOMB ROGUE ENTERS THE STAGE');
     flavor('A dying world. A bottomless catacomb. One torch, one blade, and the certainty of a bad death. You are Kargunt.');
     diceTray.innerHTML = '';
+    G = null;
+    drawMap();
     setActions([{ label: '⚔ Enter the Dark Fort', cls: 'primary', fn: beginRun }]);
   }
 
@@ -235,30 +452,30 @@
     render();
     logBox.innerHTML = '';
     heading('YOU ARE KARGUNT');
-    logLine(`You begin with <span class="hit">${G.hp} hp</span>, <span class="gold">${G.silver} silver</span>, a <b>${G.weapon.name}</b> (${dmgLabel(G.weapon.dmg)}${G.weapon.atk?` /+${G.weapon.atk} atk`:''}) and ${describeStartItem()}.`);
+    logLine(`You begin with <span class="hit">${G.hp} hp</span>, <span class="gold">${G.silver} silver</span>, a <b>${G.weapon.name}</b> (${dmgLabel(G.weapon.dmg)}${G.weapon.atk ? ` /+${G.weapon.atk} atk` : ''}) and ${describeStartItem()}.`);
     enterEntrance();
   }
 
   function describeStartItem() {
-    if (G.inv.armor)   return 'a suit of <b>armor</b>';
-    if (G.inv.potions) return 'a <b>potion</b>';
-    if (G.scrolls.length) return `a scroll of <b>${G.scrolls[0].name}</b>`;
-    if (G.inv.cloaks)  return 'a <b>cloak of invisibility</b>';
+    if (G.inv.armor)   return 'a suit of <b>armor</b> <small>(absorbs d4 damage per hit)</small>';
+    if (G.inv.potions) return 'a <b>potion</b> <small>(heals d6 hp)</small>';
+    if (G.scrolls.length) return `a scroll of <b>${G.scrolls[0].name}</b> <small>(${G.scrolls[0].eff})</small>`;
+    if (G.inv.cloaks)  return 'a <b>cloak of invisibility</b> <small>(escape combat unharmed)</small>';
     return 'nothing else';
   }
 
   function enterEntrance() {
     const sh = rollShape();
-    const r = d(4); // entrance: doors AND event
-    G.room = {
-      newDoors: r,                // entrance: d4 doors lead further in
-      explored: false,
-      spec: { seed: (Math.random() * 1e9) | 0, shape: sh.shape, doors: r, encounter: { kind: 'nothing' } },
-    };
+    const r = d(4);
+    const spec = { seed: (Math.random() * 1e9) | 0, shape: sh.shape, doors: r, encounter: { kind: 'nothing' } };
+
+    makeDungeonRoom(spec, r, -1, -1);
+    G.room = { spec, explored: false };
+
     heading('ENTRANCE ROOM');
     showDice([
       { tag: '2d6 SHAPE', val: sh.dice[0] + sh.dice[1], color: 'd-yellow' },
-      { tag: 'D4 DOORS', val: r, color: 'd-pink' },
+      { tag: 'D4 DOORS',  val: r, color: 'd-pink' },
     ]);
     setCaption(`ENTRANCE · ${sh.shape.toUpperCase()} · ${r} DOOR${r !== 1 ? 'S' : ''}`);
     flavor(`You step into a ${sh.shape.toLowerCase()} chamber where ${r} door${r !== 1 ? 's' : ''} lead${r === 1 ? 's' : ''} deeper into the dark.`);
@@ -281,7 +498,7 @@
       G.scrolls.push(sc);
       G.room.spec.encounter = { kind: 'scroll' };
       drawRoom();
-      logLine(`A dying mystic presses a scroll into your hand: <b>${sc.name}</b> (${sc.eff}${sc.uses>1?`, ${sc.uses} uses`:''}).`);
+      logLine(`A dying mystic presses a scroll into your hand: <b>${sc.name}</b> — ${sc.eff}${sc.uses > 1 ? ` (${sc.uses} uses)` : ''}.`);
       finishRoom();
     } else {
       G.room.spec.encounter = { kind: 'nothing' };
@@ -298,40 +515,42 @@
     return { kind: 'item', item: names[item] };
   }
 
-  /* ── advancing to a new room ──────────────────────────── */
-  function venture() {
-    if (G.unopenedDoors <= 0) { deadEnd(); return; }
-    G.unopenedDoors--;       // pass through one unopened door
-    enterRoom();
+  /* ── venturing through a specific door ────────────────── */
+  function ventureThruDoor(exitIdx) {
+    const current = dungeonRoom(G.dungeon.currentId);
+    if (!current) return;
+    if (current.exits[exitIdx] !== null) {
+      backtrackToRoom(current.exits[exitIdx]);
+      return;
+    }
+    enterRoom(G.dungeon.currentId, exitIdx);
   }
 
-  function enterRoom() {
+  function enterRoom(fromId, fromExitIdx) {
     const sh = rollShape();
     const doors = rollDoors();
     let result;
     if (G.falseOmen != null) { result = G.falseOmen; G.falseOmen = null; }
     else result = d(6);
 
-    G.room = {
-      newDoors: doors.n,
-      explored: false,
-      spec: { seed: (Math.random() * 1e9) | 0, shape: sh.shape, doors: doors.n, encounter: { kind: 'nothing' } },
-    };
+    const spec = { seed: (Math.random() * 1e9) | 0, shape: sh.shape, doors: doors.n, encounter: { kind: 'nothing' } };
+    makeDungeonRoom(spec, doors.n, fromId, fromExitIdx);
+    G.room = { spec, explored: false };
 
     heading('A NEW ROOM');
     showDice([
       { tag: '2d6 SHAPE', val: sh.dice[0] + sh.dice[1], color: 'd-yellow' },
-      { tag: 'D4 DOORS', val: doors.roll, color: 'd-pink' },
-      { tag: 'D6 ROOM', val: result },
+      { tag: 'D4 DOORS',  val: doors.roll, color: 'd-pink' },
+      { tag: 'D6 ROOM',   val: result },
     ]);
     setCaption(`${sh.shape.toUpperCase()} · ${doors.n} DOOR${doors.n !== 1 ? 'S' : ''}`);
     flavor(`A ${sh.shape.toLowerCase()} room opens before you, with ${doors.n === 0 ? 'no further doors' : doors.n + ' door' + (doors.n !== 1 ? 's' : '')}.`);
 
-    resolveRoom(result, sh);
+    resolveRoom(result);
     render();
   }
 
-  function resolveRoom(result, sh) {
+  function resolveRoom(result) {
     switch (result) {
       case 1:
         G.room.spec.encounter = { kind: 'nothing' };
@@ -343,15 +562,14 @@
         G.room.spec.encounter = { kind: 'trap' };
         drawRoom();
         heading('PIT TRAP');
-        let r = d(6);
-        let bonus = 0;
-        if (G.inv.ropes > 0) { bonus = 1; }
+        const r = d(6);
+        const bonus = G.inv.ropes > 0 ? 1 : 0;
         const total = r + bonus;
         showDice([{ tag: 'D6 TRAP', val: r, color: 'd-pink' }].concat(bonus ? [{ tag: 'ROPE', val: '+1', color: 'd-yellow' }] : []));
         if (total <= 3) {
           const dm = d(6);
-          logLine(`The floor gives way! You take <span class="hit">${dm} damage</span>.${bonus?' (rope softened the fall)':''}`);
-          damagePlayer(dm, true);
+          logLine(`The floor gives way! You take <span class="hit">${dm} damage</span>.${bonus ? ' (rope softened the fall)' : ''}`);
+          damagePlayer(dm);
           if (G.over) return;
         } else {
           logLine(`You catch yourself at the brink${bonus ? ', rope in hand' : ''}. Unharmed.`);
@@ -375,7 +593,7 @@
         } else {
           const dm = d(4);
           logLine(`Wrong. A mind-shattering shockwave deals <span class="hit">${dm} damage</span> (ignoring armor).`);
-          damagePlayer(dm, true);
+          damagePlayer(dm);
           if (!G.over) finishRoom();
         }
         break;
@@ -407,27 +625,99 @@
 
   function finishRoom() {
     if (G.over) return;
+    const dRoom = dungeonRoom(G.dungeon.currentId);
+    if (dRoom && !dRoom.cleared) dRoom.cleared = true;
     if (G.room && !G.room.explored) {
       G.room.explored = true;
-      G.unopenedDoors += G.room.newDoors;
       G.roomsExplored++;
     }
     render();
-    if (checkLevelUp()) return; // level-up overlay takes over
+    drawMap();
+    if (checkLevelUp()) return;
     presentRoomActions();
   }
 
+  /* ── navigation actions ───────────────────────────────── */
   function presentRoomActions() {
-    const canVenture = G.unopenedDoors > 0;
-    const acts = [];
-    if (canVenture) {
-      acts.push({ label: `⛧ Venture through a door (${G.unopenedDoors} open)`, cls: 'primary', fn: venture });
-    } else {
-      acts.push({ label: '⛧ Try the last door…', cls: 'danger', fn: deadEnd });
+    const current = dungeonRoom(G.dungeon.currentId);
+    if (!current) { setActions([]); return; }
+
+    const unexploredExits = current.exits
+      .map((e, i) => (e === null ? i : -1))
+      .filter((i) => i >= 0);
+
+    // True dead end: no unexplored exits anywhere in the whole dungeon
+    const globalUnexplored = G.dungeon.rooms.some((r) => r.cleared && r.exits.some((e) => e === null));
+    if (unexploredExits.length === 0 && !globalUnexplored) {
+      setActions([
+        { label: '☠ No doors remain — your tomb awaits', cls: 'danger',
+          fn: () => die('No door. No way on. The catacomb becomes your tomb. <b>Your adventure is over.</b>', 'deadend') },
+        { label: '☰ Pack', cls: 'ghost', fn: openInventory },
+      ]);
+      return;
     }
+
+    const acts = [];
+    const multiDoor = unexploredExits.length > 1;
+    unexploredExits.forEach((exitIdx, n) => {
+      acts.push({
+        label: multiDoor ? `⛧ Door ${n + 1} — unexplored` : '⛧ Venture through the door',
+        cls: 'primary',
+        fn: () => ventureThruDoor(exitIdx),
+      });
+    });
+
+    // backtrack options: direct connections only
+    const connectedIds = new Set();
+    current.exits.forEach((toId) => { if (toId !== null) connectedIds.add(toId); });
+    if (current.fromId >= 0) connectedIds.add(current.fromId);
+    connectedIds.forEach((id) => {
+      const r = dungeonRoom(id);
+      if (!r) return;
+      const label = id === 0 ? 'entrance' : r.shape.toLowerCase() + ' room';
+      acts.push({ label: `← Return to ${label}`, cls: 'ghost', fn: () => backtrackToRoom(id) });
+    });
+
     acts.push({ label: '☰ Pack', cls: 'ghost', fn: openInventory });
-    if (hasOmen() && canVenture) acts.push({ label: '👁 False Omen (pick room)', fn: castOmenRoom });
+    if (hasOmen() && unexploredExits.length > 0) {
+      acts.push({ label: '👁 False Omen (pick room)', fn: castOmenRoom });
+    }
     setActions(acts);
+  }
+
+  /* ── backtracking to an explored room ─────────────────── */
+  function backtrackToRoom(targetId) {
+    const target = dungeonRoom(targetId);
+    if (!target) return;
+
+    G.dungeon.currentId = targetId;
+    G.room = { spec: target.spec, explored: true };
+
+    DarkFortArt.render(canvas, target.spec);
+    drawMap();
+
+    const roomLabel = targetId === 0 ? 'entrance' : target.shape.toLowerCase();
+    heading(`RETURN: ${roomLabel.toUpperCase()}`);
+    setCaption(`${target.shape.toUpperCase()} · REVISITED`);
+
+    // d4 danger roll: 1 = weak monster ambush
+    const r = d(4);
+    showDice([{ tag: 'D4 DANGER', val: r, color: r === 1 ? 'd-pink' : 'd-yellow' }]);
+
+    if (r === 1) {
+      const m = weakMonster();
+      const ambushSpec = Object.assign({}, target.spec, {
+        encounter: { kind: 'monster', monster: { art: m.art, tough: false } },
+      });
+      DarkFortArt.render(canvas, ambushSpec);
+      logLine(`You slip back through the ${roomLabel}. Something has moved in — a <span class="hit">WEAK MONSTER</span>!`);
+      startCombat(m);
+    } else {
+      logLine(`You slip back through the ${roomLabel}. The room is undisturbed.`);
+      flavor('Dust settles. The dark breathes.');
+      render();
+      presentRoomActions();
+    }
   }
 
   /* ════════════════════════════════════════════════════════
@@ -445,10 +735,10 @@
     const m = G.combat.monster;
     const acts = [
       { label: '⚔ Attack', cls: 'primary', fn: attackRound },
-      { label: `Flee (d4 dmg)`, cls: 'danger', fn: flee },
+      { label: 'Flee (d4 dmg)', cls: 'danger', fn: flee },
     ];
     if (G.inv.potions > 0) acts.push({ label: `Drink potion (${G.inv.potions})`, fn: () => { drinkPotion(); combatActions(); } });
-    if (G.inv.cloaks > 0)  acts.push({ label: `Cloak away (${G.inv.cloaks})`, cls: 'ghost', fn: cloakEscape });
+    if (G.inv.cloaks  > 0) acts.push({ label: `Cloak away (${G.inv.cloaks})`,  cls: 'ghost', fn: cloakEscape });
     G.scrolls.forEach((s, i) => {
       if (s.key === 'palms')  acts.push({ label: `Cast Palms (${s.uses})`, fn: () => castPalms(i) });
       if (s.key === 'summon') acts.push({ label: 'Summon Daemon', fn: () => castSummon(i) });
@@ -495,30 +785,17 @@
     if (G.halved[m.name]) raw = Math.floor(raw / 2);
 
     let dm = raw, note = '';
-    // armor
-    if (G.inv.armor > 0) {
-      const a = d(4);
-      dm = Math.max(0, dm - a);
-      note += ` armor −${a};`;
-    }
-    // aegis
-    if (G.aegisUses > 0) {
-      const a = d(4);
-      dm = Math.max(0, dm - a);
-      G.aegisUses--;
-      note += ` aegis −${a};`;
-    }
+    if (G.inv.armor   > 0) { const a = d(4); dm = Math.max(0, dm - a); note += ` armor −${a};`; }
+    if (G.aegisUses   > 0) { const a = d(4); dm = Math.max(0, dm - a); G.aegisUses--; note += ` aegis −${a};`; }
     logLine(`${prefix} <span class="hit">${m.name} hits you (${tag})</span> for <span class="hit">${dm}</span>.${note ? ' (' + note.trim() + ')' : ''}`);
-    damagePlayer(dm, false, true);
+    damagePlayer(dm);
   }
 
-  function damagePlayer(amount, ignoreArmorAlreadyHandled, fromMonster) {
+  function damagePlayer(amount) {
     G.hp -= amount;
     if (amount > 0) flashHp();
     render();
-    if (G.hp <= 0) {
-      die('Your wounds open and the dark drinks you down. <b>Kargunt is dead.</b>');
-    }
+    if (G.hp <= 0) die('Your wounds open and the dark drinks you down. <b>Kargunt is dead.</b>');
   }
 
   function monsterSlain() {
@@ -528,7 +805,6 @@
     heading('SLAIN');
     logLine(`<b>${m.name}</b> falls. You earn <span class="good">${earned} points</span>.`);
 
-    // loot
     if (m.loot === 'dagger' && d(6) <= 2) { const w = weaponByRoll(2); G.weapons.push(w); logLine('You loot a <b>dagger</b> from the bones. <i>(Equip from PACK.)</i>'); }
     if (m.loot === 'scroll' && d(6) <= 2) { const sc = makeScroll(d(4)); G.scrolls.push(sc); logLine(`You loot a scroll: <b>${sc.name}</b>.`); }
     if (m.loot === 'rope'   && d(6) <= 2) { G.inv.ropes++; logLine('It was carrying a <b>rope</b>.'); }
@@ -549,14 +825,11 @@
     }
 
     G.combat = null;
+    const dRoom = dungeonRoom(G.dungeon.currentId);
+    if (dRoom && !dRoom.cleared) dRoom.cleared = true;
+    if (G.room && !G.room.explored) { G.room.explored = true; G.roomsExplored++; }
     render();
-    // room becomes explored
-    if (G.room && !G.room.explored) {
-      G.room.explored = true;
-      G.unopenedDoors += G.room.newDoors;
-      G.roomsExplored++;
-      render();
-    }
+    drawMap();
     if (leveledByBasilisk) { doLevelUp('basilisk'); return; }
     if (checkLevelUp()) return;
     presentRoomActions();
@@ -567,11 +840,9 @@
     const dm = d(4);
     showDice([{ tag: 'D4 FLEE', val: dm, color: 'd-pink' }]);
     logLine(`You flee, taking <span class="hit">${dm} damage</span>. The room is left unexplored.`);
-    const door = G.room.newDoors;       // you back out; that door stays open behind you
     G.combat = null;
-    damagePlayer(dm, false);
+    damagePlayer(dm);
     if (G.over) return;
-    // fleeing: room not explored, you retreat to the corridor; the door you came through is spent.
     render();
     presentRoomActions();
   }
@@ -631,19 +902,19 @@
   }
 
   /* ════════════════════════════════════════════════════════
-     SHOP (peddler)
+     SHOP
      ════════════════════════════════════════════════════════ */
   const SHOP = [
-    { name: 'Potion (heal d6 hp)', price: 4,  buy: () => G.inv.potions++ },
-    { name: 'Random scroll',       price: 7,  buy: () => G.scrolls.push(makeScroll(d(4))) },
-    { name: 'Dagger (d4 /+1 atk)', price: 6,  buy: () => G.weapons.push(weaponByRoll(2)) },
-    { name: 'Rope (+1 trap roll)', price: 5,  buy: () => G.inv.ropes++ },
-    { name: 'Warhammer (d6)',      price: 9,  buy: () => G.weapons.push(weaponByRoll(1)) },
-    { name: 'Sword (d6 /+1 atk)',  price: 12, buy: () => G.weapons.push(weaponByRoll(3)) },
-    { name: 'Flail (d6+1)',        price: 15, buy: () => G.weapons.push(weaponByRoll(4)) },
-    { name: 'Mighty Zweihänder (d6+2)', price: 25, buy: () => G.weapons.push({ name: 'Mighty Zweihänder', dmg: dmg(6, 2), atk: 0 }) },
-    { name: 'Armor (−d4 damage)',  price: 10, buy: () => G.inv.armor++ },
-    { name: 'Cloak of invisibility', price: 15, buy: () => G.inv.cloaks++ },
+    { name: 'Potion (heals d6 hp)',        price: 4,  buy: () => G.inv.potions++ },
+    { name: 'Random scroll',               price: 7,  buy: () => G.scrolls.push(makeScroll(d(4))) },
+    { name: 'Dagger (d4 /+1 atk)',         price: 6,  buy: () => G.weapons.push(weaponByRoll(2)) },
+    { name: 'Rope (+1 trap roll)',          price: 5,  buy: () => G.inv.ropes++ },
+    { name: 'Warhammer (d6)',              price: 9,  buy: () => G.weapons.push(weaponByRoll(1)) },
+    { name: 'Sword (d6 /+1 atk)',          price: 12, buy: () => G.weapons.push(weaponByRoll(3)) },
+    { name: 'Flail (d6+1)',               price: 15, buy: () => G.weapons.push(weaponByRoll(4)) },
+    { name: 'Mighty Zweihänder (d6+2)',   price: 25, buy: () => G.weapons.push({ name: 'Mighty Zweihänder', dmg: dmg(6, 2), atk: 0 }) },
+    { name: 'Armor (absorbs d4 damage)',   price: 10, buy: () => G.inv.armor++ },
+    { name: 'Cloak of invisibility',       price: 15, buy: () => G.inv.cloaks++ },
   ];
 
   function openShop() {
@@ -655,7 +926,8 @@
     const body = $('#overlay-body');
     body.innerHTML = `<p class="flavor">"Blood-soaked coin only, wanderer."</p>
       <p><span class="gold">You hold ${G.silver} silver.</span></p>`;
-    SHOP.forEach((item, i) => {
+
+    SHOP.forEach((item) => {
       const row = el('div', 'shop-row');
       row.innerHTML = `<span class="nm">${item.name}</span><span class="pr">${item.price}s</span>`;
       const b = el('button', 'act', 'Buy');
@@ -668,24 +940,42 @@
       row.appendChild(b);
       body.appendChild(row);
     });
-    // sell some things back at half-ish value
+
+    // sell back any gear (including starting gear)
     const sellables = [];
-    if (G.inv.potions) sellables.push({ nm: 'Potion', val: 2, take: () => G.inv.potions-- });
-    if (G.inv.ropes)   sellables.push({ nm: 'Rope', val: 2, take: () => G.inv.ropes-- });
-    if (G.weapons.length > 1) sellables.push({ nm: G.weapons[G.weapons.length-1].name, val: 4, take: () => {
-      const w = G.weapons.pop(); if (G.weapon === w) G.weapon = G.weapons[0];
-    } });
+    if (G.inv.potions) sellables.push({ nm: 'Potion', val: 2,  take: () => G.inv.potions-- });
+    if (G.inv.ropes)   sellables.push({ nm: 'Rope',   val: 2,  take: () => G.inv.ropes-- });
+    if (G.inv.armor)   sellables.push({ nm: 'Armor',  val: 4,  take: () => G.inv.armor-- });
+    if (G.inv.cloaks)  sellables.push({ nm: 'Cloak of invisibility', val: 6, take: () => G.inv.cloaks-- });
+    if (G.weapons.length > 1) {
+      const last = G.weapons[G.weapons.length - 1];
+      sellables.push({ nm: last.name, val: 4, take: () => {
+        const w = G.weapons.pop();
+        if (G.weapon === w) G.weapon = G.weapons[0];
+      }});
+    }
+
     if (sellables.length) {
       body.appendChild(el('p', null, '<b>Sell:</b>'));
       sellables.forEach((s) => {
         const row = el('div', 'shop-row');
         row.innerHTML = `<span class="nm">${s.nm}</span><span class="pr">+${s.val}s</span>`;
         const b = el('button', 'act', 'Sell');
-        b.addEventListener('click', () => { s.take(); G.silver += s.val; render(); logLine(`Sold <b>${s.nm}</b> for <span class="gold">${s.val}s</span>.`); renderShop(); });
-        row.appendChild(b); body.appendChild(row);
+        b.addEventListener('click', () => {
+          s.take(); G.silver += s.val; render();
+          logLine(`Sold <b>${s.nm}</b> for <span class="gold">${s.val}s</span>.`);
+          renderShop();
+        });
+        row.appendChild(b);
+        body.appendChild(row);
       });
     }
-    setOverlayActions([{ label: 'Leave the stall', cls: 'primary', fn: () => { closeOverlay(); logLine('The peddler dissolves into smoke. The room is explored.'); finishRoom(); } }]);
+
+    setOverlayActions([{ label: 'Leave the stall', cls: 'primary', fn: () => {
+      closeOverlay();
+      logLine('The peddler dissolves into smoke. The room is explored.');
+      finishRoom();
+    } }]);
   }
 
   /* ════════════════════════════════════════════════════════
@@ -695,12 +985,12 @@
     openOverlay('YOUR PACK', '', () => {});
     const body = $('#overlay-body');
     body.innerHTML = '';
-    // weapons
+
     body.appendChild(el('p', null, '<b>WEAPONS</b>'));
     G.weapons.forEach((w) => {
       const row = el('div', 'shop-row');
       const equipped = w === G.weapon;
-      row.innerHTML = `<span class="nm">${w.name} <small>(${dmgLabel(w.dmg)}${w.atk?` /+${w.atk} atk`:''})</small>${equipped?' ◀ wielded':''}</span>`;
+      row.innerHTML = `<span class="nm">${w.name}${equipped ? ' ◀' : ''} <small>(${dmgLabel(w.dmg)}${w.atk ? ` /+${w.atk} atk` : ''})</small></span>`;
       if (!equipped) {
         const b = el('button', 'act', 'Wield');
         b.addEventListener('click', () => { G.weapon = w; render(); openInventory(); });
@@ -708,35 +998,55 @@
       }
       body.appendChild(row);
     });
-    // consumables
-    const cons = [];
-    if (G.inv.potions) cons.push(`Potion ×${G.inv.potions}`);
-    if (G.inv.armor)   cons.push(`Armor ×${G.inv.armor}`);
-    if (G.inv.ropes)   cons.push(`Rope ×${G.inv.ropes}`);
-    if (G.inv.cloaks)  cons.push(`Cloak ×${G.inv.cloaks}`);
-    body.appendChild(el('p', null, `<b>GEAR</b><br>${cons.length ? cons.join(' · ') : '<i>none</i>'}`));
+
+    const gearItems = [];
+    if (G.inv.armor)   gearItems.push(`Armor <small class="cs-v">×${G.inv.armor} — absorbs d4 damage per hit</small>`);
+    if (G.inv.potions) gearItems.push(`Potion <small class="cs-v">×${G.inv.potions} — heals d6 hp</small>`);
+    if (G.inv.ropes)   gearItems.push(`Rope <small class="cs-v">×${G.inv.ropes} — +1 on pit trap rolls</small>`);
+    if (G.inv.cloaks)  gearItems.push(`Cloak <small class="cs-v">×${G.inv.cloaks} — escape combat unharmed (one charge each)</small>`);
+    body.appendChild(el('p', null,
+      `<b>GEAR</b><br>${gearItems.length ? gearItems.join('<br>') : '<i>none</i>'}`));
+
     if (G.scrolls.length) {
-      body.appendChild(el('p', null, `<b>SCROLLS</b><br>${G.scrolls.map((s) => `${s.name}${s.uses>1?` (${s.uses})`:''}`).join('<br>')}`));
+      const lines = G.scrolls.map((s) =>
+        `${s.name}${s.uses > 1 ? ` (${s.uses} uses)` : ''} <small class="cs-v">— ${s.eff}</small>`);
+      body.appendChild(el('p', null, `<b>SCROLLS</b><br>${lines.join('<br>')}`));
     }
+
     const acts = [];
-    if (G.inv.potions > 0 && G.hp < G.maxHp) acts.push({ label: 'Drink potion', cls: 'primary', fn: () => { drinkPotion(); openInventory(); } });
+    if (G.inv.potions > 0 && G.hp < G.maxHp) {
+      acts.push({ label: 'Drink potion', cls: 'primary', fn: () => { drinkPotion(); openInventory(); } });
+    }
     acts.push({ label: 'Close', fn: closeOverlay });
     setOverlayActions(acts);
   }
 
   /* ════════════════════════════════════════════════════════
-     FALSE OMEN — pick next room result
+     FALSE OMEN
      ════════════════════════════════════════════════════════ */
   function hasOmen() { return G.scrolls.some((s) => s.key === 'omen'); }
+
   function castOmenRoom() {
     const idx = G.scrolls.findIndex((s) => s.key === 'omen');
     if (idx < 0) return;
+    const current = dungeonRoom(G.dungeon.currentId);
+    const unexploredExits = current
+      ? current.exits.map((e, i) => (e === null ? i : -1)).filter((i) => i >= 0)
+      : [];
+    if (!unexploredExits.length) return;
+
     openOverlay('FALSE OMEN', '<p class="flavor">You bend fate. Choose what the next room holds.</p>', () => {});
     const labels = ['Nothing', 'Pit trap', 'Soothsayer', 'Weak monster', 'Tough monster', 'Peddler'];
     setOverlayActions(labels.map((lab, i) => ({
       label: `${i + 1}. ${lab}`,
       cls: i === 5 ? 'primary' : '',
-      fn: () => { G.scrolls.splice(idx, 1); G.falseOmen = i + 1; closeOverlay(); render(); venture(); },
+      fn: () => {
+        G.scrolls.splice(idx, 1);
+        G.falseOmen = i + 1;
+        closeOverlay();
+        render();
+        ventureThruDoor(unexploredExits[0]);
+      },
     })));
   }
 
@@ -751,24 +1061,24 @@
   }
 
   function doLevelUp(via) {
-    // pay the cost / reset
     let how = '';
-    if (via === 'points') { G.points = 0; G.roomsExplored = 0; how = 'You have braved 12 rooms and earned glory. (Points reset; a fresh catacomb beckons.)'; }
-    else if (via === 'silver') { G.silver -= 40; how = 'You return 40 silver to the poor of the ruined Wästland homes.'; }
+    if (via === 'points')   { G.points = 0; G.roomsExplored = 0; how = 'You have braved 12 rooms and earned glory. (Points reset; a fresh catacomb beckons.)'; }
+    else if (via === 'silver')   { G.silver -= 40; how = 'You return 40 silver to the poor of the ruined Wästland homes.'; }
     else if (via === 'basilisk') { how = 'The basilisk\'s death-magic hurls you to a higher station.'; }
     render();
 
-    // roll a fresh result off the list
     let roll;
     do { roll = d(6); } while (!G.levelList.includes(roll));
     G.levelList = G.levelList.filter((x) => x !== roll);
 
     const eff = applyLevelEffect(roll);
     heading('LEVEL UP');
-    openOverlay('LEVEL UP', `<p>${how}</p><p>You roll a <span class="die-inline">${roll}</span> on the boons table:</p><p><b>${eff.title}</b></p><p class="flavor">${eff.text}</p>`, () => {}, 'level');
+    openOverlay('LEVEL UP',
+      `<p>${how}</p><p>You roll a <span class="die-inline">${roll}</span> on the boons table:</p><p><b>${eff.title}</b></p><p class="flavor">${eff.text}</p>`,
+      () => {}, 'level');
 
     if (eff.chooser) {
-      eff.chooser();   // sets its own overlay actions
+      eff.chooser();
     } else {
       setOverlayActions([{ label: G.levelList.length ? 'Onward' : 'Retire a legend', cls: 'primary', fn: () => {
         closeOverlay();
@@ -798,14 +1108,14 @@
         G.weapons.push({ name: 'Mighty Zweihänder', dmg: dmg(6, 2), atk: 0 });
         return { title: 'Mighty Zweihänder', text: 'You find a MIGHTY ZWEIHÄNDER (d6+2 damage). Equip it from your PACK.' };
       default:
-        return { title: 'Sworn foes', text: 'Choose one WEAK and one TOUGH monster — from now on their damage is halved. This can never be changed.', chooser: chooseHalved };
+        return { title: 'Sworn foes', text: 'Choose one WEAK and one TOUGH monster — from now on their damage is halved.', chooser: chooseHalved };
     }
   }
 
   function chooseHalved() {
-    const weak = ['BLOOD-DRENCHED SKELETON', 'CATACOMB CULTIST', 'GOBLIN', 'UNDEAD HOUND'];
+    const weak  = ['BLOOD-DRENCHED SKELETON', 'CATACOMB CULTIST', 'GOBLIN', 'UNDEAD HOUND'];
     const tough = ['NECRO-SORCERER', 'SMALL STONE TROLL', 'MEDUSA', 'RUIN BASILISK'];
-    let pickWeak = null;
+    let pickWeak = null, tWrapPick = null;
     const body = $('#overlay-body');
     const wWrap = el('div'); wWrap.innerHTML = '<p><b>Weak monster:</b></p>';
     const tWrap = el('div'); tWrap.innerHTML = '<p><b>Tough monster:</b></p>';
@@ -820,9 +1130,16 @@
           render(); presentRoomActions();
         } }]);
     };
-    let tWrapPick = null;
-    weak.forEach((nm) => { const b = el('button', 'act', nm); b.addEventListener('click', () => { pickWeak = nm; markChosen(wWrap, b); finish(); }); wWrap.appendChild(b); });
-    tough.forEach((nm) => { const b = el('button', 'act', nm); b.addEventListener('click', () => { tWrapPick = nm; markChosen(tWrap, b); finish(); }); tWrap.appendChild(b); });
+    weak.forEach((nm) => {
+      const b = el('button', 'act', nm);
+      b.addEventListener('click', () => { pickWeak = nm; markChosen(wWrap, b); finish(); });
+      wWrap.appendChild(b);
+    });
+    tough.forEach((nm) => {
+      const b = el('button', 'act', nm);
+      b.addEventListener('click', () => { tWrapPick = nm; markChosen(tWrap, b); finish(); });
+      tWrap.appendChild(b);
+    });
     finish();
   }
   function markChosen(wrap, btn) {
@@ -833,13 +1150,6 @@
   /* ════════════════════════════════════════════════════════
      ENDINGS
      ════════════════════════════════════════════════════════ */
-  function damageNoArmor() {}
-
-  function deadEnd() {
-    if (G.unopenedDoors > 0) { venture(); return; }
-    die('No door. No way on. You have reached a dead end and the catacomb becomes your tomb. <b>Your adventure is over.</b>', 'deadend');
-  }
-
   function die(msg, kind) {
     if (G.over) return;
     G.over = true;
@@ -847,25 +1157,29 @@
     render();
     heading('DEATH');
     logLine(msg);
-    openOverlay('YOU DIED', `<img class="death-skull" src="assets/skull.png" alt="">
-      <p>${msg}</p>
-      <p>Rooms explored: <b>${G.roomsExplored}</b> · Points: <b>${G.points}</b> · Silver: <b>${G.silver}</b> · Catacomb: <b>${G.catacomb}</b></p>
-      <p class="flavor">Everything you knew blackens and burns.</p>`, () => {}, 'death');
+    openOverlay('YOU DIED',
+      `<img class="death-skull" src="assets/skull.png" alt="">
+       <p>${msg}</p>
+       <p>Rooms explored: <b>${G.roomsExplored}</b> · Points: <b>${G.points}</b> · Silver: <b>${G.silver}</b> · Catacomb: <b>${G.catacomb}</b></p>
+       <p class="flavor">Everything you knew blackens and burns.</p>`,
+      () => {}, 'death');
     setOverlayActions([{ label: '☠ Roll a new rogue', cls: 'primary', fn: () => { closeOverlay(); startTitle(); } }]);
   }
 
   function winGame() {
     G.over = true;
-    openOverlay('YOU RETIRE', `<p>Every boon is claimed. You retire and remain in your cottage or castle until the 7th Misery occurs and everything you know blackens and burns.</p>
-      <p class="flavor">Congratulations, Kargunt.</p>`, () => {}, 'level');
+    openOverlay('YOU RETIRE',
+      `<p>Every boon is claimed. You retire and remain in your cottage or castle until the 7th Misery occurs and everything you know blackens and burns.</p>
+       <p class="flavor">Congratulations, Kargunt.</p>`,
+      () => {}, 'level');
     setOverlayActions([{ label: 'Begin anew', cls: 'primary', fn: () => { closeOverlay(); startTitle(); } }]);
   }
 
   /* ── overlay plumbing ─────────────────────────────────── */
   function openOverlay(title, bodyHtml, _onClose, cls) {
-    $('#overlay-title').className = cls || '';
+    $('#overlay-title').className  = cls || '';
     $('#overlay-title').textContent = title;
-    $('#overlay-body').innerHTML = bodyHtml;
+    $('#overlay-body').innerHTML   = bodyHtml;
     $('#overlay-actions').innerHTML = '';
     overlay.classList.remove('hidden');
   }
@@ -881,5 +1195,8 @@
   function closeOverlay() { overlay.classList.add('hidden'); }
 
   /* ── boot ─────────────────────────────────────────────── */
-  window.addEventListener('DOMContentLoaded', startTitle);
+  window.addEventListener('DOMContentLoaded', () => {
+    initMapClicks();
+    startTitle();
+  });
 })();
