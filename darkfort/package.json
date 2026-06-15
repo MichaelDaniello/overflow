@@ -1,0 +1,13 @@
+{
+  "name": "dark-fort",
+  "version": "1.0.0",
+  "description": "A browser game for Dark Fort (Mörk Borg) that procedurally draws each room's dice-rolled shape, doors and encounter in a Mörk Borg art style.",
+  "private": true,
+  "scripts": {
+    "test": "node test/harness.js",
+    "gallery": "node test/render-gallery.js"
+  },
+  "devDependencies": {
+    "canvas": "^3.2.3"
+  }
+}

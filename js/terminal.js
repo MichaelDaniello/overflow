@@ -328,6 +328,11 @@
         '  <span class="highlight">status</span>      System diagnostics',
         '  <span class="highlight">hack</span>        Attempt to breach mainframe',
         '',
+        '  <span class="highlight">─── ARCADE ───</span>',
+        '',
+        '  <span class="highlight">darkfort</span>    Boot DARK FORT // a Mörk Borg dungeon crawl',
+        '              <span class="dim">aliases: game, play</span>',
+        '',
         '  <span class="highlight">─── FILESYSTEM ───</span>',
         '',
         '  <span class="highlight">pwd</span>         Print working directory',
@@ -414,6 +419,29 @@
         ];
       },
     },
+
+    darkfort: {
+      desc: 'Boot DARK FORT dungeon crawl',
+      run: () => {
+        // hand off to the game; the lines below show while the page swaps
+        setTimeout(() => { window.location.href = 'darkfort/index.html'; }, 900);
+        return [
+          '',
+          '  <span class="magenta">─── LOADING CARTRIDGE: DARK_FORT.rom ───</span>',
+          '',
+          '  <span class="dim">decrypting catacomb tiles..............</span> <span class="success">OK</span>',
+          '  <span class="dim">summoning 2d6 room geometry............</span> <span class="success">OK</span>',
+          '  <span class="dim">rolling d4 for doors...................</span> <span class="success">OK</span>',
+          '  <span class="dim">waking the necro-sorcerer..............</span> <span class="orange">UNHOLY</span>',
+          '',
+          '  <span class="highlight">THE 7TH MISERY APPROACHES.</span> Descend, Kargunt...',
+          '',
+        ];
+      },
+    },
+
+    game: { hidden: true, desc: 'alias: darkfort', run: (a) => COMMANDS.darkfort.run(a) },
+    play: { hidden: true, desc: 'alias: darkfort', run: (a) => COMMANDS.darkfort.run(a) },
 
     pwd: {
       desc: 'Print working directory',

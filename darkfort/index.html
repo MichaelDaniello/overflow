@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DARK FORT // a Mörk Borg dungeon</title>
+  <meta name="description" content="A solo dungeon-crawl in the dying world of Mörk Borg. Roll the dice, descend into the catacombs, and die in a beautifully filthy room.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=Anton&family=IM+Fell+English:ital@0;1&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/darkfort.css">
+</head>
+<body>
+  <div id="grain"></div>
+
+  <header id="masthead">
+    <div class="mast-left">☠ CATACOMB ☠</div>
+    <h1 class="mast-title">DARK FORT</h1>
+    <div class="mast-right">vol.&nbsp;d6</div>
+  </header>
+
+  <main id="stage">
+    <!-- Left: the procedurally drawn room -->
+    <section id="scene-panel">
+      <div id="scene-frame">
+        <canvas id="room-canvas" width="640" height="640" aria-label="The current room"></canvas>
+        <div id="scene-caption">THE DARK FORT AWAITS</div>
+      </div>
+      <div id="dice-tray" aria-live="polite"></div>
+    </section>
+
+    <!-- Right: stats, narration, actions -->
+    <section id="play-panel">
+      <div id="charsheet">
+        <div class="cs-name" id="cs-name">KARGUNT</div>
+        <div class="cs-stats">
+          <div class="stat hp"><span class="lbl">HP</span><span class="val" id="stat-hp">15</span><span class="max" id="stat-maxhp">/15</span></div>
+          <div class="stat silver"><span class="lbl">SILVER</span><span class="val" id="stat-silver">0</span></div>
+          <div class="stat points"><span class="lbl">POINTS</span><span class="val" id="stat-points">0</span></div>
+          <div class="stat rooms"><span class="lbl">ROOMS</span><span class="val" id="stat-rooms">0</span><span class="max">/12</span></div>
+        </div>
+        <div class="cs-row"><span class="cs-key">WEAPON</span><span class="cs-v" id="stat-weapon">—</span></div>
+        <div class="cs-row"><span class="cs-key">PACK</span><span class="cs-v" id="stat-pack">empty</span></div>
+      </div>
+
+      <div id="log" aria-live="polite"></div>
+
+      <div id="actions"></div>
+    </section>
+  </main>
+
+  <div id="overlay" class="hidden">
+    <div id="overlay-card">
+      <div id="overlay-title"></div>
+      <div id="overlay-body"></div>
+      <div id="overlay-actions"></div>
+    </div>
+  </div>
+
+  <footer id="colophon">
+    <a href="../index.html" id="back-link">‹ back to terminal</a>
+    <span class="sep">·</span>
+    An unofficial DARK FORT engine · Dark Fort &amp; Mörk Borg © Ockult Örtmästare Games &amp; Stockholm Kartell ·
+    <a href="https://morkborg.com" target="_blank" rel="noopener">morkborg.com</a>
+  </footer>
+
+  <script src="js/art.js"></script>
+  <script src="js/game.js"></script>
+</body>
+</html>
