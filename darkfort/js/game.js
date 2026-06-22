@@ -917,6 +917,11 @@
     { name: 'Cloak of invisibility',       price: 15, buy: () => G.inv.cloaks++ },
   ];
 
+  // the peddler buys back at the same price it sells for
+  const PRICE = { potion: 4, rope: 5, armor: 10, cloak: 15, scroll: 7 };
+  const WEAPON_PRICE = { 'Warhammer': 9, 'Dagger': 6, 'Sword': 12, 'Flail': 15, 'Mighty Zweihänder': 25 };
+  function weaponPrice(w) { return WEAPON_PRICE[w.name] != null ? WEAPON_PRICE[w.name] : 6; }
+
   function openShop() {
     openOverlay('THE PEDDLER', '', () => {});
     renderShop();
@@ -941,19 +946,29 @@
       body.appendChild(row);
     });
 
-    // sell back any gear (including starting gear)
+    // sell back everything you carry — gear, scrolls and weapons
+    // (equipped included) — at the same price the peddler charges.
     const sellables = [];
-    if (G.inv.potions) sellables.push({ nm: 'Potion', val: 2,  take: () => G.inv.potions-- });
-    if (G.inv.ropes)   sellables.push({ nm: 'Rope',   val: 2,  take: () => G.inv.ropes-- });
-    if (G.inv.armor)   sellables.push({ nm: 'Armor',  val: 4,  take: () => G.inv.armor-- });
-    if (G.inv.cloaks)  sellables.push({ nm: 'Cloak of invisibility', val: 6, take: () => G.inv.cloaks-- });
-    if (G.weapons.length > 1) {
-      const last = G.weapons[G.weapons.length - 1];
-      sellables.push({ nm: last.name, val: 4, take: () => {
-        const w = G.weapons.pop();
-        if (G.weapon === w) G.weapon = G.weapons[0];
-      }});
-    }
+    if (G.inv.potions) sellables.push({ nm: `Potion ×${G.inv.potions}`,  val: PRICE.potion, take: () => G.inv.potions-- });
+    if (G.inv.ropes)   sellables.push({ nm: `Rope ×${G.inv.ropes}`,      val: PRICE.rope,   take: () => G.inv.ropes-- });
+    if (G.inv.armor)   sellables.push({ nm: `Armor ×${G.inv.armor}`,     val: PRICE.armor,  take: () => G.inv.armor-- });
+    if (G.inv.cloaks)  sellables.push({ nm: `Cloak of invisibility ×${G.inv.cloaks}`, val: PRICE.cloak, take: () => G.inv.cloaks-- });
+    G.scrolls.forEach((sc, i) => {
+      sellables.push({ nm: `${sc.name}${sc.uses > 1 ? ` (${sc.uses})` : ''}`, val: PRICE.scroll, take: () => G.scrolls.splice(i, 1) });
+    });
+    // every weapon is sellable, equipped or not, as long as one remains
+    G.weapons.forEach((w, i) => {
+      const equipped = w === G.weapon;
+      sellables.push({
+        nm: `${w.name}${equipped ? ' ◀' : ''}`,
+        val: weaponPrice(w),
+        disabled: G.weapons.length <= 1,   // never leave yourself unarmed
+        take: () => {
+          G.weapons.splice(i, 1);
+          if (G.weapon === w) G.weapon = G.weapons[0];
+        },
+      });
+    });
 
     if (sellables.length) {
       body.appendChild(el('p', null, '<b>Sell:</b>'));
@@ -961,9 +976,10 @@
         const row = el('div', 'shop-row');
         row.innerHTML = `<span class="nm">${s.nm}</span><span class="pr">+${s.val}s</span>`;
         const b = el('button', 'act', 'Sell');
-        b.addEventListener('click', () => {
+        if (s.disabled) b.disabled = true;
+        else b.addEventListener('click', () => {
           s.take(); G.silver += s.val; render();
-          logLine(`Sold <b>${s.nm}</b> for <span class="gold">${s.val}s</span>.`);
+          logLine(`Sold <b>${s.nm.replace(/ ◀$/, '')}</b> for <span class="gold">${s.val}s</span>.`);
           renderShop();
         });
         row.appendChild(b);
