@@ -1,4 +1,4 @@
-const { createCanvas } = require('canvas');
+const { createCanvas, loadImage } = require('canvas');
 const fs = require('fs'), path = require('path'), vm = require('vm');
 
 // load art.js in a sandbox that exposes window
@@ -7,6 +7,14 @@ sandbox.window = sandbox; sandbox.globalThis = sandbox;
 vm.createContext(sandbox);
 vm.runInContext(fs.readFileSync(path.join(__dirname,'../js/art.js'),'utf8'), sandbox, {filename:'art.js'});
 const Art = sandbox.DarkFortArt;
+
+(async () => {
+const skull = await loadImage(path.join(__dirname,'../assets/skull.png'));
+Art.setSkull(skull);
+main();
+})();
+
+function main() {
 
 const shapes = ['Irregular cave','Oval','Cross-shaped','Corridor','Square','Round','Rectangular','Triangular','Skull-shaped'];
 const encs = [
@@ -51,3 +59,4 @@ gallery(encs.map((e,i)=>({label:(e.monster?e.monster.art:e.kind),spec:{seed:i*53
 const t=createCanvas(640,640); Art.renderTitle(t);
 fs.writeFileSync(path.join(__dirname,'title.png'), t.toBuffer('image/png'));
 console.log('wrote title.png');
+}

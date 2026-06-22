@@ -320,6 +320,12 @@ button.act:disabled { opacity: 0.4; cursor: not-allowed; box-shadow: none; }
 #overlay-title.death { background: var(--blood); color: var(--paper); }
 #overlay-title.level { background: var(--pink); color: var(--paper); }
 #overlay-body { font-size: 16px; line-height: 1.5; margin-bottom: 18px; }
+.death-skull {
+  display: block;
+  width: 160px;
+  margin: -6px auto 12px;
+  filter: drop-shadow(3px 3px 0 var(--pink));
+}
 #overlay-body p { margin: 0 0 10px; }
 #overlay-body .flavor { font-family: 'IM Fell English', serif; font-style: italic; }
 #overlay-actions { display: flex; flex-wrap: wrap; gap: 10px; }
@@ -355,6 +361,49 @@ button.act:disabled { opacity: 0.4; cursor: not-allowed; box-shadow: none; }
   padding: 2px 8px;
 }
 #back-link:hover { background: var(--pink); color: var(--paper); }
+
+/* ── Dungeon map ──────────────────────────────────────── */
+#map-frame {
+  border: 5px solid var(--black);
+  border-top: 0;
+  background: var(--ink);
+  box-shadow: 10px 10px 0 var(--pink);
+  overflow: hidden;
+  position: relative;
+}
+#map-label {
+  font-family: 'Anton', sans-serif;
+  font-size: 10px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--yellow);
+  background: var(--black);
+  display: inline-block;
+  padding: 3px 12px 2px;
+  transform: skewX(-4deg);
+  margin: 8px 8px 3px 10px;
+}
+#map-canvas {
+  display: block;
+  width: 100%;
+  height: auto;
+  cursor: pointer;
+}
+
+/* ── Dark Forest theme overrides ──────────────────────── */
+body.forest {
+  --pink: #6cff4a;
+  --pink-d: #3fa82c;
+}
+body.forest #masthead { background: #2e3d1c; color: var(--paper); border-bottom-color: #06120a; }
+body.forest .mast-title { color: var(--yellow); }
+body.forest #scene-frame { box-shadow: 10px 10px 0 #3a5a2a; }
+body.forest #map-frame   { box-shadow: 10px 10px 0 #3a5a2a; }
+body.forest #log { box-shadow: 6px 6px 0 #1a2a12; }
+body.forest button.act.primary { background: #4c8a2c; color: var(--paper); }
+body.forest button.act.primary:hover { background: #5fa83a; }
+body.forest #back-link { background: var(--yellow); }
+body.forest #map-label { color: #aaff88; }
 
 /* utility */
 .hidden { display: none !important; }

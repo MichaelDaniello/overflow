@@ -25,7 +25,60 @@
     green:  '#6cff4a',
   };
 
-  /* ── seeded PRNG so a given room always redraws the same ── */
+  /* ── real Mörk Borg skull art (ink-on-transparent PNG) ──
+     Loaded once; until it arrives the procedural glyph stands
+     in. When it finishes we redraw whatever is on screen.    */
+  let skullImg = null;
+  let skullReady = false;
+  let lastDraw = null;
+  if (typeof Image !== 'undefined') {
+    skullImg = new Image();
+    skullImg.onload = () => { skullReady = true; if (lastDraw) lastDraw(); };
+    // resolve relative to this script so it works from any page depth
+    let src = 'assets/skull.png';
+    try {
+      const s = (typeof document !== 'undefined') && document.currentScript && document.currentScript.src;
+      if (s) src = s.replace(/js\/art\.js.*$/, 'assets/skull.png');
+    } catch (e) {}
+    skullImg.src = src;
+  }
+  // headless renderers (node-canvas) can inject the loaded image directly
+  function setSkull(img) { skullImg = img; skullReady = !!img; }
+
+  // draw the real skull centred on (cx,cy) at a given height.
+  // `plate` paints a torn paper backing first, so the black ink
+  // reads on dark backgrounds (title, hoods, death screen).
+  function drawSkull(ctx, cx, cy, height, opts) {
+    opts = opts || {};
+    if (!skullReady || !skullImg) { // graceful fallback
+      skullGlyph(ctx, cx, cy, height * 0.42, opts.fill || COL.bone, opts.eye || COL.black);
+      return;
+    }
+    const ar = skullImg.width / skullImg.height;
+    const h = height, w = h * ar;
+    if (opts.plate) paperPlate(ctx, cx, cy, w * 0.92, h * 0.92, opts.rnd);
+    ctx.drawImage(skullImg, cx - w / 2, cy - h / 2, w, h);
+  }
+
+  function paperPlate(ctx, cx, cy, w, h, rnd) {
+    const r = rnd || Math.random;
+    ctx.save();
+    ctx.fillStyle = COL.paper;
+    ctx.beginPath();
+    const n = 14;
+    for (let i = 0; i <= n; i++) {
+      const t = (i / n) * Math.PI * 2;
+      const rr = 0.62 + 0.12 * Math.sin(t * 3 + r() * 6) + r() * 0.06;
+      const x = cx + Math.cos(t) * w * rr;
+      const y = cy + Math.sin(t) * h * rr;
+      if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    }
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+  }
+
+
   function mulberry32(seed) {
     let a = seed >>> 0;
     return function () {
@@ -148,6 +201,7 @@
 
   /* ── main render ──────────────────────────────────────── */
   function render(canvas, spec) {
+    lastDraw = () => render(canvas, spec);
     const ctx = canvas.getContext('2d');
     const W = canvas.width, H = canvas.height;
     const rnd = mulberry32(spec.seed || 1);
@@ -307,9 +361,9 @@
       ctx.lineTo(x + Math.cos(a) * l, y + Math.sin(a) * l);
       ctx.stroke();
     }
-    // small skull
+    // a real skull resting in the dust
     const sx = cx + scale * 0.1, sy = cy;
-    skullGlyph(ctx, sx, sy, 16, COL.bone, COL.black);
+    drawSkull(ctx, sx, sy, 70, { rnd });
   }
 
   function skullGlyph(ctx, x, y, r, fill, eye) {
@@ -562,8 +616,8 @@
     // legs
     limb(ctx, cx - 4, cy + 30, cx - 22, cy + 78, 6, c);
     limb(ctx, cx + 4, cy + 30, cx + 22, cy + 78, 6, c);
-    // skull
-    skullGlyph(ctx, cx, cy - 66, 20, c, COL.black);
+    // real skull for the head
+    drawSkull(ctx, cx, cy - 72, 92, { rnd });
     // blood drench — kept low and dark so the bones stay readable
     ctx.fillStyle = COL.blood;
     splatter(ctx, cx - 4, cy + 60, rnd, COL.blood, 22);
@@ -656,10 +710,8 @@
     ctx.moveTo(cx, cy - 86);
     ctx.lineTo(cx + 52, cy + 86); ctx.lineTo(cx - 52, cy + 86);
     ctx.closePath(); ctx.fill(); ctx.stroke();
-    // skull face hood
-    ctx.fillStyle = COL.black;
-    ctx.beginPath(); ctx.arc(cx, cy - 70, 28, 0, Math.PI*2); ctx.fill();
-    skullGlyph(ctx, cx, cy - 66, 16, COL.bone, COL.blood);
+    // hooded skull face — real skull on a torn paper plate so it reads
+    drawSkull(ctx, cx, cy - 64, 78, { plate: true, rnd });
     // death-ray staff
     limb(ctx, cx + 36, cy + 20, cx + 70, cy - 96, 7, '#3a2b4a');
     ctx.fillStyle = COL.green;
@@ -773,20 +825,24 @@
 
   /* ── title splash (for the start screen) ──────────────── */
   function renderTitle(canvas) {
+    lastDraw = () => renderTitle(canvas);
     const ctx = canvas.getContext('2d');
     const W = canvas.width, H = canvas.height;
     const rnd = mulberry32(1337);
     ctx.fillStyle = COL.black; ctx.fillRect(0, 0, W, H);
     drawRockHatch(ctx, W, H, rnd);
-    // big central skull
-    halo(ctx, W/2, H/2, 240, 'rgba(255,230,0,0.16)');
-    skullGlyph(ctx, W/2, H/2 - 20, 110, COL.bone, COL.blood);
-    splatter(ctx, W/2, H/2 + 120, rnd, COL.pinkD, 120);
+    // the real Mörk Borg skull, big, on a yellow burst
+    halo(ctx, W / 2, H / 2 - 20, 280, 'rgba(255,230,0,0.22)');
+    splatter(ctx, W / 2 - 120, H / 2 + 150, rnd, COL.pinkD, 120);
+    splatter(ctx, W / 2 + 140, H / 2 + 60, rnd, COL.pinkD, 90);
+    drawSkull(ctx, W / 2, H / 2 - 30, 360, { plate: true, rnd });
+    // splatter a little blood dripping off it
+    splatter(ctx, W / 2, H / 2 + 150, rnd, COL.blood, 70);
     ctx.fillStyle = COL.yellow;
     ctx.font = "bold 30px Anton, sans-serif";
     ctx.textAlign = 'center';
-    ctx.fillText('DESCEND, KARGUNT', W/2, H - 60);
+    ctx.fillText('DESCEND, KARGUNT', W / 2, H - 56);
   }
 
-  window.DarkFortArt = { render, renderTitle, COL };
+  window.DarkFortArt = { render, renderTitle, COL, setSkull };
 })();
