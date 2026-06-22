@@ -1083,6 +1083,12 @@
      LEVEL UP
      ════════════════════════════════════════════════════════ */
   function checkLevelUp() {
+    // Inside a barrow/keep detour the rambler's own silver and points
+    // ride along; don't let Dark Fort's silver/room triggers fire off
+    // them (that would burn 40 forest silver and leak boons). A barrow
+    // can still grant a retained level-up via the basilisk's special,
+    // which calls doLevelUp directly.
+    if (G.sub) return false;
     if (G.levelList.length === 0) return false;
     if (G.roomsExplored >= 12 && G.points >= 15) { doLevelUp('points'); return true; }
     if (G.silver >= 40) { doLevelUp('silver'); return true; }
@@ -1252,7 +1258,8 @@
     const c = opts.character || {};
     G.sub = {
       maxRooms: opts.maxRooms || 6, roomsDone: 0, onReturn: opts.onReturn,
-      label: opts.label || 'THE DARK', startAttackBonus: 0, startMaxHp: c.maxHp || G.maxHp,
+      label: opts.label || 'THE DARK', startAttackBonus: 0,
+      startMaxHp: c.maxHp != null ? c.maxHp : G.maxHp,
     };
     G.hp = c.hp != null ? c.hp : G.hp;
     G.maxHp = c.maxHp != null ? c.maxHp : G.maxHp;

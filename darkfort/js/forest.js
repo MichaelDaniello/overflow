@@ -82,6 +82,7 @@
       cur: null,              // {q,r}
       combat: null,
       pendingBarrow: null,
+      forceTerrain: null,
       started: false,
       over: false,
     };
@@ -475,9 +476,11 @@
       return;
     }
 
-    // brand-new hex: roll terrain
-    const tRoll = sum(2, 6);
-    const terrain = Art.TERRAIN_2D6[tRoll];
+    // brand-new hex: roll terrain (or honour a fate-forced barrow/keep
+    // set by a teleport / edge-of-map result landing on a "6")
+    let tRoll = null, terrain;
+    if (F.forceTerrain) { terrain = F.forceTerrain; F.forceTerrain = null; }
+    else { tRoll = sum(2, 6); terrain = Art.TERRAIN_2D6[tRoll]; }
     const hex = {
       q, r, terrain, seed: (Math.random() * 1e9) | 0,
       encounter: { kind: 'nothing' },
@@ -486,7 +489,9 @@
     F.hexes[hexKey(q, r)] = hex;
 
     heading('A NEW HEX');
-    showDice([{ tag: '2d6 TERRAIN', val: tRoll, color: 'd-yellow' }]);
+    showDice([tRoll != null
+      ? { tag: '2d6 TERRAIN', val: tRoll, color: 'd-yellow' }
+      : { tag: 'FATE', val: '☠', color: 'd-pink' }]);
     setCaption(terrain.toUpperCase());
     flavor(`You push into ${terrain.toLowerCase()}.`);
     drawScene();
@@ -668,14 +673,10 @@
       const col = Math.floor(Math.random() * MAP_W);
       r = row; q = col - (row - (row & 1)) / 2;
     } while (!inBounds(q, r));
-    // if the dropped die "rolls a 6", the destination becomes a barrow/keep
-    const key = hexKey(q, r);
-    if (!F.hexes[key] && d6() === 6) {
-      F.hexes[key] = {
-        q, r, terrain: Math.random() < 0.5 ? 'Cursed Barrow' : 'Ruined Keep',
-        seed: (Math.random() * 1e9) | 0, encounter: { kind: 'nothing' },
-        trails: [], foraged: false, camped: false, explored: false, forced: true,
-      };
+    // if the dropped die "rolls a 6" and we land on fresh ground, fate
+    // makes the destination a barrow/keep (consumed by enterHex)
+    if (!F.hexes[hexKey(q, r)] && d6() === 6) {
+      F.forceTerrain = Math.random() < 0.5 ? 'Cursed Barrow' : 'Ruined Keep';
     }
     enterHex(q, r, null);
   }
@@ -1071,7 +1072,9 @@
     showDice([{ tag: 'BALM d6', val: h, color: 'd-yellow' }]);
     logLine(`<span class="good">${s.name}</span> — you heal <span class="good">${h} HP</span>.`);
     render();
-    if (F.combat) combatActions(); else presentHexActions();
+    if (F.combat) combatActions();
+    else if (F.pendingBarrow) barrowEntryActions(F.pendingBarrow);
+    else presentHexActions();
   }
   function castOwl(i) {
     F.owlFights = 2;
@@ -1173,11 +1176,13 @@
       body.appendChild(el('p', null, `<b>SCROLLS</b><br>${F.scrolls.map((s) => `${s.name}${s.uses > 1 ? ` (${s.uses})` : ''} <small class="cs-v">— ${s.eff}</small>`).join('<br>')}`));
     }
     const acts = [];
-    // out-of-combat usable scrolls
+    // out-of-combat usable scrolls. Silent Passage and Wealdken act on
+    // the hex/movement, so they're withheld while a barrow descent is
+    // pending (they would otherwise let you skip the descent).
     F.scrolls.forEach((s, i) => {
       if (s.key === 'balm' && F.hp < F.maxHp) acts.push({ label: `Use ${s.name}`, cls: 'primary', fn: () => { closeOverlay(); castBalm(i); } });
-      if (s.key === 'silent') acts.push({ label: 'Cast Silent Passage', fn: () => { F.silentHexes += d6(); s.uses--; if (s.uses <= 0) F.scrolls.splice(i, 1); logLine(`<span class="good">Silent Passage</span> — you move unseen for ${F.silentHexes} hexes.`); closeOverlay(); render(); presentHexActions(); } });
-      if (s.key === 'weald') acts.push({ label: 'Cast Wealdken', fn: () => { const h = curHex(); s.uses--; if (s.uses <= 0) F.scrolls.splice(i, 1); h.trails = []; assignTrails(h, 3); logLine('<span class="good">Wealdken</span> reveals 3 trails.'); closeOverlay(); render(); presentHexActions(); } });
+      if (s.key === 'silent' && !F.pendingBarrow) acts.push({ label: 'Cast Silent Passage', fn: () => { F.silentHexes += d6(); s.uses--; if (s.uses <= 0) F.scrolls.splice(i, 1); logLine(`<span class="good">Silent Passage</span> — you move unseen for ${F.silentHexes} hexes.`); closeOverlay(); render(); presentHexActions(); } });
+      if (s.key === 'weald' && !F.pendingBarrow) acts.push({ label: 'Cast Wealdken', fn: () => { const h = curHex(); s.uses--; if (s.uses <= 0) F.scrolls.splice(i, 1); h.trails = []; assignTrails(h, 3); logLine('<span class="good">Wealdken</span> reveals 3 trails.'); closeOverlay(); render(); presentHexActions(); } });
     });
     acts.push({ label: 'Close', fn: () => {
       closeOverlay();
