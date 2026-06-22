@@ -390,6 +390,21 @@ button.act:disabled { opacity: 0.4; cursor: not-allowed; box-shadow: none; }
   cursor: pointer;
 }
 
+/* ── Dark Forest theme overrides ──────────────────────── */
+body.forest {
+  --pink: #6cff4a;
+  --pink-d: #3fa82c;
+}
+body.forest #masthead { background: #2e3d1c; color: var(--paper); border-bottom-color: #06120a; }
+body.forest .mast-title { color: var(--yellow); }
+body.forest #scene-frame { box-shadow: 10px 10px 0 #3a5a2a; }
+body.forest #map-frame   { box-shadow: 10px 10px 0 #3a5a2a; }
+body.forest #log { box-shadow: 6px 6px 0 #1a2a12; }
+body.forest button.act.primary { background: #4c8a2c; color: var(--paper); }
+body.forest button.act.primary:hover { background: #5fa83a; }
+body.forest #back-link { background: var(--yellow); }
+body.forest #map-label { color: #aaff88; }
+
 /* utility */
 .hidden { display: none !important; }
 .shake { animation: shake 0.4s; }

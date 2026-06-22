@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>DARK FORT // a Mörk Borg dungeon</title>
-  <meta name="description" content="A solo dungeon-crawl in the dying world of Mörk Borg. Roll the dice, descend into the catacombs, and die in a beautifully filthy room.">
+  <title>DARK FORT // DARK FOREST — a Mörk Borg dungeon &amp; hex-crawl</title>
+  <meta name="description" content="Two solo Mörk Borg games in one: descend the Dark Fort catacombs room by room, or wander the cursed Dark Forest across a hex map. Roll the dice; die badly.">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=Anton&family=IM+Fell+English:ital@0;1&display=swap" rel="stylesheet">
@@ -14,8 +14,8 @@
   <div id="grain"></div>
 
   <header id="masthead">
-    <div class="mast-left">☠ CATACOMB ☠</div>
-    <h1 class="mast-title">DARK FORT</h1>
+    <div class="mast-left">☠ MÖRK BORG ☠</div>
+    <h1 class="mast-title" id="mast-title">MÖRK BORG</h1>
     <div class="mast-right">vol.&nbsp;d6</div>
   </header>
 
@@ -41,7 +41,7 @@
           <div class="stat hp"><span class="lbl">HP</span><span class="val" id="stat-hp">15</span><span class="max" id="stat-maxhp">/15</span></div>
           <div class="stat silver"><span class="lbl">SILVER</span><span class="val" id="stat-silver">0</span></div>
           <div class="stat points"><span class="lbl">POINTS</span><span class="val" id="stat-points">0</span></div>
-          <div class="stat rooms"><span class="lbl">ROOMS</span><span class="val" id="stat-rooms">0</span><span class="max">/12</span></div>
+          <div class="stat rooms"><span class="lbl" id="stat4-lbl">ROOMS</span><span class="val" id="stat-rooms">0</span><span class="max" id="stat4-max">/12</span></div>
         </div>
         <div class="cs-row"><span class="cs-key">WEAPON</span><span class="cs-v" id="stat-weapon">—</span></div>
         <div class="cs-row"><span class="cs-key">PACK</span><span class="cs-v" id="stat-pack">empty</span></div>
@@ -69,6 +69,9 @@
   </footer>
 
   <script src="js/art.js"></script>
+  <script src="js/forest-art.js"></script>
   <script src="js/game.js"></script>
+  <script src="js/forest.js"></script>
+  <script src="js/boot.js"></script>
 </body>
 </html>

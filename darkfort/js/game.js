@@ -62,6 +62,7 @@
       aegisUses: 0,
       catacomb: 1,
       over: false,
+      sub: null,
       dungeon: { rooms: [], currentId: -1, nextId: 0 },
     };
     grantStartItem(d(4));
@@ -257,6 +258,7 @@
     const mc = $('#map-canvas');
     if (!mc) return;
     mc.addEventListener('click', (e) => {
+      if (window.GameMode && window.GameMode.current !== 'fort' && window.GameMode.current !== 'fort-sub') return;
       if (!G || G.over || G.combat) return;
       if (overlay && !overlay.classList.contains('hidden')) return;
       const current = dungeonRoom(G.dungeon.currentId);
@@ -436,6 +438,7 @@
      GAME FLOW
      ════════════════════════════════════════════════════════ */
   function startTitle() {
+    applyFortChrome();
     DarkFortArt.renderTitle(canvas);
     setCaption('DARK FORT');
     logBox.innerHTML = '';
@@ -444,11 +447,15 @@
     diceTray.innerHTML = '';
     G = null;
     drawMap();
-    setActions([{ label: '⚔ Enter the Dark Fort', cls: 'primary', fn: beginRun }]);
+    setActions([
+      { label: '⚔ Enter the Dark Fort', cls: 'primary', fn: beginRun },
+      { label: '‹ Menu', cls: 'ghost', fn: () => window.GameMenu && window.GameMenu() },
+    ]);
   }
 
   function beginRun() {
     newGame();
+    applyFortChrome();
     render();
     logBox.innerHTML = '';
     heading('YOU ARE KARGUNT');
@@ -630,6 +637,7 @@
     if (G.room && !G.room.explored) {
       G.room.explored = true;
       G.roomsExplored++;
+      if (G.sub) G.sub.roomsDone = (G.sub.roomsDone || 0) + 1;
     }
     render();
     drawMap();
@@ -639,6 +647,10 @@
 
   /* ── navigation actions ───────────────────────────────── */
   function presentRoomActions() {
+    // barrow/keep sub-dungeon: bail out to the forest once the
+    // rolled room budget is spent.
+    if (G.sub && (G.sub.roomsDone || 0) >= G.sub.maxRooms) { subComplete(); return; }
+
     const current = dungeonRoom(G.dungeon.currentId);
     if (!current) { setActions([]); return; }
 
@@ -649,6 +661,7 @@
     // True dead end: no unexplored exits anywhere in the whole dungeon
     const globalUnexplored = G.dungeon.rooms.some((r) => r.cleared && r.exits.some((e) => e === null));
     if (unexploredExits.length === 0 && !globalUnexplored) {
+      if (G.sub) { subComplete(); return; }
       setActions([
         { label: '☠ No doors remain — your tomb awaits', cls: 'danger',
           fn: () => die('No door. No way on. The catacomb becomes your tomb. <b>Your adventure is over.</b>', 'deadend') },
@@ -827,7 +840,7 @@
     G.combat = null;
     const dRoom = dungeonRoom(G.dungeon.currentId);
     if (dRoom && !dRoom.cleared) dRoom.cleared = true;
-    if (G.room && !G.room.explored) { G.room.explored = true; G.roomsExplored++; }
+    if (G.room && !G.room.explored) { G.room.explored = true; G.roomsExplored++; if (G.sub) G.sub.roomsDone = (G.sub.roomsDone || 0) + 1; }
     render();
     drawMap();
     if (leveledByBasilisk) { doLevelUp('basilisk'); return; }
@@ -1168,6 +1181,8 @@
      ════════════════════════════════════════════════════════ */
   function die(msg, kind) {
     if (G.over) return;
+    // inside a barrow/keep detour, death is reported back to the forest
+    if (G.sub) { G.over = true; G.combat = null; finishSub(true, msg); return; }
     G.over = true;
     G.combat = null;
     render();
@@ -1179,16 +1194,23 @@
        <p>Rooms explored: <b>${G.roomsExplored}</b> · Points: <b>${G.points}</b> · Silver: <b>${G.silver}</b> · Catacomb: <b>${G.catacomb}</b></p>
        <p class="flavor">Everything you knew blackens and burns.</p>`,
       () => {}, 'death');
-    setOverlayActions([{ label: '☠ Roll a new rogue', cls: 'primary', fn: () => { closeOverlay(); startTitle(); } }]);
+    setOverlayActions([
+      { label: '☠ Roll a new rogue', cls: 'primary', fn: () => { closeOverlay(); startTitle(); } },
+      { label: '‹ Menu', cls: 'ghost', fn: () => { closeOverlay(); window.GameMenu && window.GameMenu(); } },
+    ]);
   }
 
   function winGame() {
+    if (G.sub) { finishSub(false); return; }
     G.over = true;
     openOverlay('YOU RETIRE',
       `<p>Every boon is claimed. You retire and remain in your cottage or castle until the 7th Misery occurs and everything you know blackens and burns.</p>
        <p class="flavor">Congratulations, Kargunt.</p>`,
       () => {}, 'level');
-    setOverlayActions([{ label: 'Begin anew', cls: 'primary', fn: () => { closeOverlay(); startTitle(); } }]);
+    setOverlayActions([
+      { label: 'Begin anew', cls: 'primary', fn: () => { closeOverlay(); startTitle(); } },
+      { label: '‹ Menu', cls: 'ghost', fn: () => { closeOverlay(); window.GameMenu && window.GameMenu(); } },
+    ]);
   }
 
   /* ── overlay plumbing ─────────────────────────────────── */
@@ -1210,9 +1232,65 @@
   }
   function closeOverlay() { overlay.classList.add('hidden'); }
 
-  /* ── boot ─────────────────────────────────────────────── */
-  window.addEventListener('DOMContentLoaded', () => {
-    initMapClicks();
-    startTitle();
-  });
+  /* ── chrome (masthead + stat labels) ──────────────────── */
+  function applyFortChrome() {
+    $('#mast-title').textContent = 'DARK FORT';
+    $('#stat4-lbl').textContent  = 'ROOMS';
+    $('#stat4-max').textContent  = '/12';
+    $('#map-label').textContent  = 'DUNGEON MAP';
+    document.body.classList.remove('forest');
+    if (window.GameMode && window.GameMode.current !== 'fort-sub') window.GameMode.current = 'fort';
+  }
+
+  /* ════════════════════════════════════════════════════════
+     BARROW / KEEP SUB-DUNGEON
+     Entered from Dark Forest. Runs a bounded Dark Fort crawl
+     seeded from the forest rambler, then hands a result back.
+     ════════════════════════════════════════════════════════ */
+  function startSub(opts) {
+    newGame();
+    const c = opts.character || {};
+    G.sub = {
+      maxRooms: opts.maxRooms || 6, roomsDone: 0, onReturn: opts.onReturn,
+      label: opts.label || 'THE DARK', startAttackBonus: 0, startMaxHp: c.maxHp || G.maxHp,
+    };
+    G.hp = c.hp != null ? c.hp : G.hp;
+    G.maxHp = c.maxHp != null ? c.maxHp : G.maxHp;
+    G.silver = c.silver != null ? c.silver : G.silver;
+    G.weapon = { name: c.weaponName || 'Blade', dmg: dmg(6, (c.weaponMod || 0) + (c.dmgBonus || 0)), atk: c.weaponAtk || 0 };
+    G.weapons = [G.weapon];
+    G.attackBonus = c.attackBonus || 0;
+    G.sub.startAttackBonus = G.attackBonus;
+    applyFortChrome();
+    render();
+    logBox.innerHTML = '';
+    heading(G.sub.label);
+    logLine(`You enter with <span class="hit">${G.hp} hp</span> and a <b>${G.weapon.name}</b>. <b>${G.sub.maxRooms}</b> rooms of old dark await.`);
+    enterEntrance();
+  }
+
+  function subComplete() {
+    heading('THE WAY OUT');
+    logLine('You have plundered the last room. A stair climbs back toward the trees.');
+    setActions([
+      { label: '↟ Climb back to the forest', cls: 'primary', fn: () => finishSub(false) },
+      { label: '☰ Pack', cls: 'ghost', fn: openInventory },
+    ]);
+  }
+
+  function finishSub(died, deathMsg) {
+    const sub = G.sub;
+    const result = {
+      hp: G.hp, maxHp: G.maxHp, silver: G.silver,
+      bonusMaxHp: Math.max(0, G.maxHp - sub.startMaxHp),
+      bonusAttack: Math.max(0, G.attackBonus - sub.startAttackBonus),
+      died: !!died, deathMsg: deathMsg || '',
+    };
+    G.sub = null;
+    G.over = true;
+    if (typeof sub.onReturn === 'function') sub.onReturn(result);
+  }
+
+  /* ── public API (boot is owned by boot.js) ────────────── */
+  window.DarkFort = { init: initMapClicks, start: startTitle, startSub };
 })();

@@ -70,6 +70,7 @@ const ROOT = new Node('body');
 function reg(sel) { return (registry[sel] = registry[sel] || new Node('div')); }
 
 const document = {
+  body: ROOT,
   createElement: (tag) => new Node(tag),
   querySelector: (sel) => reg(sel),
   addEventListener: (ev, fn) => { if (ev === 'DOMContentLoaded') document._dcl = fn; },
@@ -82,7 +83,7 @@ sandbox.addEventListener = (ev, fn) => { if (ev === 'DOMContentLoaded') sandbox.
 const windowObj = sandbox;
 vm.createContext(sandbox);
 
-for (const file of ['../js/art.js', '../js/game.js']) {
+for (const file of ['../js/art.js', '../js/forest-art.js', '../js/game.js', '../js/forest.js', '../js/boot.js']) {
   const code = fs.readFileSync(path.join(__dirname, file), 'utf8');
   vm.runInContext(code, sandbox, { filename: file });
 }
@@ -104,10 +105,10 @@ let steps = 0, deaths = 0, retires = 0;
 const hist = [];
 const labelCounts = {}, titleCounts = {};
 
-// One "run" = play until a YOU DIED / YOU RETIRE overlay appears, then restart.
+// One "run" = play until a death / retire / escape overlay appears, then
+// the menu-driven loop just picks another game. The first screen is the
+// start menu, so we let the random action picker drive from there.
 let restarts = 0;
-const start = () => { const b = actions().find((x) => /Enter the Dark Fort/.test(label(x))); if (b) b.click(); };
-start();
 
 while (steps < 600000) {
   steps++;
@@ -134,7 +135,7 @@ while (steps < 600000) {
   if (hist.length > 12) hist.shift();
   try { btn.click(); }
   catch (e) { console.log('CRASH after sequence:\n' + hist.join('\n')); throw e; }
-  if (label(btn) === 'Roll a new rogue' || label(btn) === 'Begin anew') restarts++;
+  if (/new rogue|Begin anew|new rambler|Wander anew|Play DARK/.test(label(btn))) restarts++;
 }
 
 console.log('steps:', steps, '| deaths:', deaths, '| retires:', retires, '| restarts:', restarts);
