@@ -4,17 +4,17 @@
    ============================================================ */
 
 :root {
-  --black:   #0a0a08;
-  --ink:     #141410;
-  --paper:   #e9e4d4;
-  --paper-d: #cdc7b4;
-  --yellow:  #ffe600;
-  --yellow-d:#d9c400;
-  --pink:    #ff2079;
-  --pink-d:  #c2105a;
-  --blood:   #b21d1d;
-  --bone:    #d8d2bf;
-  --green:   #6cff4a;
+  --black:   #0b0a09;
+  --ink:     #17140f;
+  --paper:   #d7ccae;
+  --paper-d: #b8ad8e;
+  --yellow:  #c9a23f;   /* antique candlelit gold */
+  --yellow-d:#9a7a2c;
+  --pink:    #9e2533;   /* deep blood-crimson accent */
+  --pink-d:  #5f1620;
+  --blood:   #7c1f1f;
+  --bone:    #c8bd9f;
+  --green:   #5e7d3a;
 }
 
 * { box-sizing: border-box; }
@@ -31,7 +31,7 @@ html, body {
 
 body {
   background:
-    radial-gradient(ellipse at 50% -10%, #1c1c16 0%, var(--black) 60%),
+    radial-gradient(ellipse at 50% -8%, #241c14 0%, #120f0b 45%, var(--black) 75%),
     var(--black);
   overflow-x: hidden;
 }
@@ -280,6 +280,9 @@ button.act.primary:hover { background: #ff4f96; }
 button.act.danger  { background: var(--black); color: var(--blood); border-color: var(--blood); }
 button.act.ghost   { background: transparent; color: var(--paper); border-color: var(--paper); box-shadow: 4px 4px 0 var(--pink); }
 button.act:disabled { opacity: 0.4; cursor: not-allowed; box-shadow: none; }
+/* ghost buttons inside the (light parchment) overlay need dark ink, or
+   they're invisible — e.g. the "Menu" button on the death card */
+#overlay button.act.ghost { color: var(--ink); border-color: var(--ink); }
 
 /* ── Overlay (level up / death / shop) ────────────────── */
 #overlay {

@@ -17,12 +17,12 @@
     paperD: '#c9c3b0',
     stone:  '#b8b2a0',
     stoneD: '#9a937f',
-    yellow: '#ffe600',
-    pink:   '#ff2079',
-    pinkD:  '#c2105a',
-    blood:  '#a01818',
+    yellow: '#c9a23f',
+    pink:   '#9e2533',
+    pinkD:  '#5f1620',
+    blood:  '#7c1f1f',
     bone:   '#ded8c4',
-    green:  '#6cff4a',
+    green:  '#5e7d3a',
   };
 
   const Ink = window.Ink;
@@ -285,53 +285,76 @@
   }
 
   /* ── doors ────────────────────────────────────────────── */
+  // edge anchor + orientation per compass direction (N,E,S,W)
+  function doorEdges(cx, cy, scale) {
+    return [
+      { x: cx,                y: cy - scale * 1.02, o: 'v' }, // N
+      { x: cx + scale * 1.18, y: cy,                o: 'h' }, // E
+      { x: cx,                y: cy + scale * 1.05, o: 'v' }, // S
+      { x: cx - scale * 1.18, y: cy,                o: 'h' }, // W
+    ];
+  }
+
   function drawDoors(ctx, cx, cy, scale, spec, rnd) {
+    const edges = doorEdges(cx, cy, scale);
+    // direction-aware doors (from the game) keep the room art aligned to
+    // the map and the door buttons.
+    if (spec.doorList && spec.doorList.length) {
+      spec.doorList.forEach((d) => {
+        const e = edges[d.dir];
+        if (e) drawDoor(ctx, e.x, e.y, e.o, rnd, d.open);
+      });
+      return;
+    }
+    // legacy count-based (gallery / title splash)
     const n = spec.doors || 0;
     if (n <= 0) return;
-    // candidate edges: top, right, bottom, left
-    const edges = [
-      { x: cx,             y: cy - scale * 1.02, dir: 'v' },
-      { x: cx + scale*1.18, y: cy,               dir: 'h' },
-      { x: cx,             y: cy + scale * 1.05, dir: 'v' },
-      { x: cx - scale*1.18, y: cy,               dir: 'h' },
-    ];
-    // deterministic-ish selection
     const order = [0, 1, 2, 3].sort(() => rnd() - 0.5);
     for (let i = 0; i < Math.min(n, 4); i++) {
       const e = edges[order[i]];
-      drawDoor(ctx, e.x, e.y, e.dir, rnd);
+      drawDoor(ctx, e.x, e.y, e.o, rnd, false);
     }
   }
 
-  function drawDoor(ctx, x, y, dir, rnd) {
+  function drawDoor(ctx, x, y, o, rnd, open) {
     const w = 30, h = 46;
     ctx.save();
     ctx.translate(x, y);
-    if (dir === 'h') ctx.rotate(Math.PI / 2);
+    if (o === 'h') ctx.rotate(Math.PI / 2);
     // dark opening
     ctx.fillStyle = COL.black;
     ctx.fillRect(-w / 2, -h / 2, w, h);
-    // arched top
     ctx.beginPath();
     ctx.arc(0, -h / 2, w / 2, Math.PI, 0);
     ctx.fill();
-    // frame
-    ctx.strokeStyle = COL.yellow;
+    // frame — bright for an unexplored door, dim for one already used
+    ctx.strokeStyle = open ? 'rgba(201,162,63,0.35)' : COL.yellow;
     ctx.lineWidth = 4;
     ctx.strokeRect(-w / 2, -h / 2, w, h);
-    // a couple of plank lines
-    ctx.strokeStyle = 'rgba(255,230,0,0.4)';
-    ctx.lineWidth = 1.5;
-    for (let i = 1; i < 3; i++) {
-      ctx.beginPath();
-      ctx.moveTo(-w / 2 + (w / 3) * i, -h / 2);
-      ctx.lineTo(-w / 2 + (w / 3) * i, h / 2);
-      ctx.stroke();
+    if (!open) {
+      ctx.strokeStyle = 'rgba(201,162,63,0.4)';
+      ctx.lineWidth = 1.5;
+      for (let i = 1; i < 3; i++) {
+        ctx.beginPath();
+        ctx.moveTo(-w / 2 + (w / 3) * i, -h / 2);
+        ctx.lineTo(-w / 2 + (w / 3) * i, h / 2);
+        ctx.stroke();
+      }
     }
     ctx.restore();
   }
 
   /* ── encounters ───────────────────────────────────────── */
+  // props that can be overridden by a supplied illustration
+  function propImage(ctx, cx, cy, key) {
+    const rec = Ink.creatureImage && Ink.creatureImage(key);
+    if (rec && rec.ready) {
+      Ink.drawCreatureImage(ctx, rec, cx, cy, Math.min(ctx.canvas.width, ctx.canvas.height) * 0.7);
+      return true;
+    }
+    return false;
+  }
+
   function drawEncounter(ctx, cx, cy, scale, spec, rnd) {
     const enc = spec.encounter;
     if (!enc || enc.kind === 'nothing') {
@@ -341,33 +364,35 @@
     switch (enc.kind) {
       case 'item':       drawItem(ctx, cx, cy, enc.item, rnd); break;
       case 'scroll':     drawItem(ctx, cx, cy, 'Scroll', rnd); break;
-      case 'trap':       drawTrap(ctx, cx, cy, scale, rnd); break;
-      case 'soothsayer': drawSeer(ctx, cx, cy, rnd); break;
-      case 'peddler':    drawPeddler(ctx, cx, cy, rnd); break;
+      case 'trap':       if (!propImage(ctx, cx, cy, 'trap')) drawTrap(ctx, cx, cy, scale, rnd); break;
+      case 'soothsayer': if (!propImage(ctx, cx, cy, 'soothsayer')) drawSeer(ctx, cx, cy, rnd); break;
+      case 'peddler':    if (!propImage(ctx, cx, cy, 'peddler')) drawPeddler(ctx, cx, cy, rnd); break;
       case 'monster':    drawMonster(ctx, cx, cy, enc.monster, rnd); break;
       default:           bonesOnFloor(ctx, cx, cy, scale, rnd);
     }
   }
 
   function bonesOnFloor(ctx, cx, cy, scale, rnd) {
-    // scattered bones / a lonely skull
+    // an empty room: just dust and a few scattered bone shards along the
+    // floor — no big focal skull hovering in the centre.
     ctx.strokeStyle = COL.bone;
     ctx.fillStyle = COL.bone;
-    ctx.lineWidth = 5;
     ctx.lineCap = 'round';
-    for (let i = 0; i < 3; i++) {
-      const x = cx + (rnd() - 0.5) * scale * 0.9;
-      const y = cy + (rnd() - 0.5) * scale * 0.9 + scale * 0.3;
+    for (let i = 0; i < 5; i++) {
+      const x = cx + (rnd() - 0.5) * scale * 1.5;
+      const y = cy + scale * (0.42 + rnd() * 0.42);
       const a = rnd() * Math.PI;
-      const l = 16 + rnd() * 18;
+      const l = 9 + rnd() * 16;
+      ctx.globalAlpha = 0.4 + rnd() * 0.3;
+      ctx.lineWidth = 3 + rnd() * 2;
       ctx.beginPath();
       ctx.moveTo(x, y);
       ctx.lineTo(x + Math.cos(a) * l, y + Math.sin(a) * l);
       ctx.stroke();
     }
-    // a real skull resting in the dust
-    const sx = cx + scale * 0.1, sy = cy;
-    drawSkull(ctx, sx, sy, 70, { rnd });
+    ctx.globalAlpha = 1;
+    // a small half-buried skull tucked low and to the side
+    drawSkull(ctx, cx - scale * 0.6, cy + scale * 0.64, 34, { rnd });
   }
 
   function skullGlyph(ctx, x, y, r, fill, eye) {

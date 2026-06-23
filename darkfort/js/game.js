@@ -63,29 +63,56 @@
       catacomb: 1,
       over: false,
       sub: null,
-      dungeon: { rooms: [], currentId: -1, nextId: 0 },
+      dungeon: { rooms: [], currentId: -1, nextId: 0, occupied: new Set() },
     };
     grantStartItem(d(4));
   }
 
-  /* ── dungeon graph ────────────────────────────────────── */
+  /* ── dungeon graph (compass-aligned) ──────────────────── */
+  // doors carry a compass direction so the room art, the door buttons
+  // and the map all agree. N=up, E=right, S=down, W=left.
+  const DELTA = [{ x: 0, y: -1 }, { x: 1, y: 0 }, { x: 0, y: 1 }, { x: -1, y: 0 }];
+  const DIRNAME = ['north', 'east', 'south', 'west'];
+  const opp = (d) => (d + 2) % 4;
+  const cellKey = (x, y) => x + ',' + y;
+
   function dungeonRoom(id) {
     return G.dungeon.rooms.find((r) => r.id === id) || null;
   }
 
-  function makeDungeonRoom(spec, numExits, fromId, fromExitIdx) {
+  // create a room reached by venturing parent.dirs[fromExitIdx]; assigns
+  // its own forward-door directions to free, reserved neighbour cells.
+  function makeDungeonRoom(spec, requestedDoors, fromId, fromExitIdx) {
     const id = G.dungeon.nextId++;
-    const pos = placeOnMap(fromId, fromExitIdx);
+    let pos, backDir = -1;
+    if (fromId < 0) {
+      pos = { x: 0, y: 0 };
+    } else {
+      const parent = dungeonRoom(fromId);
+      const comingDir = parent.dirs[fromExitIdx];
+      pos = { x: parent.mapX + DELTA[comingDir].x, y: parent.mapY + DELTA[comingDir].y };
+      backDir = opp(comingDir);
+    }
+    G.dungeon.occupied.add(cellKey(pos.x, pos.y));
+
+    // pick forward-door directions: not the way back, leading to free cells
+    const cand = [0, 1, 2, 3].filter((d) => d !== backDir);
+    for (let i = cand.length - 1; i > 0; i--) { const j = (Math.random() * (i + 1)) | 0; const t = cand[i]; cand[i] = cand[j]; cand[j] = t; }
+    const dirs = [];
+    for (const d of cand) {
+      if (dirs.length >= requestedDoors) break;
+      const nk = cellKey(pos.x + DELTA[d].x, pos.y + DELTA[d].y);
+      if (!G.dungeon.occupied.has(nk)) { dirs.push(d); G.dungeon.occupied.add(nk); }
+    }
+
     const room = {
-      id,
-      spec,
-      shape: spec.shape,
-      cleared: false,
-      exits: Array(numExits).fill(null), // null = unexplored, number = target room id
+      id, spec, shape: spec.shape, cleared: false,
+      exits: Array(dirs.length).fill(null),  // null = unexplored, else room id
+      dirs,                                   // compass dir per exit index
+      backDir,                                // dir back to parent, or -1
       fromId: fromId >= 0 ? fromId : -1,
       fromExitIdx: fromExitIdx >= 0 ? fromExitIdx : -1,
-      mapX: pos.x,
-      mapY: pos.y,
+      mapX: pos.x, mapY: pos.y,
     };
     G.dungeon.rooms.push(room);
     if (fromId >= 0 && fromExitIdx >= 0) {
@@ -93,31 +120,17 @@
       if (parent) parent.exits[fromExitIdx] = id;
     }
     G.dungeon.currentId = id;
+    spec.doors = dirs.length;     // realized door count (may be < requested)
     return room;
   }
 
-  function placeOnMap(fromId, fromExitIdx) {
-    if (fromId < 0) return { x: 0, y: 0 };
-    const parent = dungeonRoom(fromId);
-    if (!parent) return { x: 0, y: 0 };
-    const DIRS = [[0, 1], [1, 0], [0, -1], [-1, 0]];
-    const off = fromExitIdx || 0;
-    for (let attempt = 0; attempt < 4; attempt++) {
-      const [dx, dy] = DIRS[(off + attempt) % 4];
-      const nx = parent.mapX + dx, ny = parent.mapY + dy;
-      if (!G.dungeon.rooms.some((r) => r.mapX === nx && r.mapY === ny)) {
-        return { x: nx, y: ny };
-      }
-    }
-    for (let dist = 2; dist <= 8; dist++) {
-      for (const [dx, dy] of DIRS) {
-        const nx = parent.mapX + dx * dist, ny = parent.mapY + dy * dist;
-        if (!G.dungeon.rooms.some((r) => r.mapX === nx && r.mapY === ny)) {
-          return { x: nx, y: ny };
-        }
-      }
-    }
-    return { x: G.dungeon.rooms.length, y: 0 };
+  // door descriptors for the art engine: the back door plus each forward
+  // door, tagged with whether it's been explored.
+  function doorListFor(room) {
+    const list = [];
+    if (room.backDir >= 0) list.push({ dir: room.backDir, open: true });
+    room.dirs.forEach((d, i) => list.push({ dir: d, open: room.exits[i] !== null }));
+    return list;
   }
 
   /* ── map canvas ───────────────────────────────────────── */
@@ -186,48 +199,23 @@
       });
     });
 
-    // draw unexplored-exit stubs from cleared rooms
+    // draw unexplored-exit stubs in their true compass directions
+    const DIR_ANGLE = [-Math.PI / 2, 0, Math.PI / 2, Math.PI]; // N,E,S,W on screen
     ctx.setLineDash([3, 4]);
     ctx.lineWidth = 1.5;
     rooms.forEach((room) => {
       if (!room.cleared) return;
-      const unexplored = room.exits.filter((e) => e === null).length;
-      if (!unexplored) return;
       const rx = toX(room.mapX), ry = toY(room.mapY);
-
-      // gather directions already used by explored connections
-      const usedAngles = new Set();
-      room.exits.forEach((toId) => {
-        if (toId !== null) {
-          const t = dungeonRoom(toId);
-          if (t) {
-            const a = Math.round(Math.atan2(t.mapY - room.mapY, t.mapX - room.mapX) * 4 / Math.PI) & 7;
-            usedAngles.add(a);
-          }
-        }
-      });
-      if (room.fromId >= 0) {
-        const p = dungeonRoom(room.fromId);
-        if (p) {
-          const a = Math.round(Math.atan2(p.mapY - room.mapY, p.mapX - room.mapX) * 4 / Math.PI) & 7;
-          usedAngles.add(a);
-        }
-      }
-
-      const SLOT_ANGLES = [0, 4, 2, 6, 1, 3, 5, 7];
-      let drawn = 0;
-      for (const slot of SLOT_ANGLES) {
-        if (drawn >= unexplored) break;
-        if (usedAngles.has(slot)) continue;
-        const angle = slot * Math.PI / 4;
-        const isCurrent = room.id === G.dungeon.currentId;
+      const isCurrent = room.id === G.dungeon.currentId;
+      room.dirs.forEach((d, i) => {
+        if (room.exits[i] !== null) return;   // explored exits are drawn as lines
+        const angle = DIR_ANGLE[d];
         ctx.strokeStyle = isCurrent ? COL.yellow + '88' : '#3a3428';
         ctx.beginPath();
         ctx.moveTo(rx + Math.cos(angle) * (MAP_ROOM / 2 + 2), ry + Math.sin(angle) * (MAP_ROOM / 2 + 2));
         ctx.lineTo(rx + Math.cos(angle) * (MAP_ROOM / 2 + 12), ry + Math.sin(angle) * (MAP_ROOM / 2 + 12));
         ctx.stroke();
-        drawn++;
-      }
+      });
     });
     ctx.setLineDash([]);
 
@@ -346,6 +334,8 @@
   }
 
   function drawRoom() {
+    const room = dungeonRoom(G.dungeon.currentId);
+    if (room && G.room) G.room.spec.doorList = doorListFor(room);
     DarkFortArt.render(canvas, G.room.spec);
     drawMap();
   }
@@ -670,25 +660,27 @@
       return;
     }
 
+    const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
     const acts = [];
-    const multiDoor = unexploredExits.length > 1;
-    unexploredExits.forEach((exitIdx, n) => {
+    // venture through each unexplored door, labelled by its compass direction
+    unexploredExits.forEach((exitIdx) => {
+      const dir = current.dirs[exitIdx];
       acts.push({
-        label: multiDoor ? `⛧ Door ${n + 1} — unexplored` : '⛧ Venture through the door',
+        label: `⛧ ${cap(DIRNAME[dir])} door`,
         cls: 'primary',
         fn: () => ventureThruDoor(exitIdx),
       });
     });
 
-    // backtrack options: direct connections only
-    const connectedIds = new Set();
-    current.exits.forEach((toId) => { if (toId !== null) connectedIds.add(toId); });
-    if (current.fromId >= 0) connectedIds.add(current.fromId);
-    connectedIds.forEach((id) => {
-      const r = dungeonRoom(id);
+    // backtrack through any explored connection (forward doors + the way back)
+    const conns = [];
+    current.exits.forEach((toId, i) => { if (toId !== null) conns.push({ id: toId, dir: current.dirs[i] }); });
+    if (current.fromId >= 0 && current.backDir >= 0) conns.push({ id: current.fromId, dir: current.backDir });
+    conns.forEach((c) => {
+      const r = dungeonRoom(c.id);
       if (!r) return;
-      const label = id === 0 ? 'entrance' : r.shape.toLowerCase() + ' room';
-      acts.push({ label: `← Return to ${label}`, cls: 'ghost', fn: () => backtrackToRoom(id) });
+      const what = c.id === 0 ? 'entrance' : r.shape.toLowerCase();
+      acts.push({ label: `← ${cap(DIRNAME[c.dir])}: ${what}`, cls: 'ghost', fn: () => backtrackToRoom(c.id) });
     });
 
     acts.push({ label: '☰ Pack', cls: 'ghost', fn: openInventory });
@@ -705,6 +697,7 @@
 
     G.dungeon.currentId = targetId;
     G.room = { spec: target.spec, explored: true };
+    target.spec.doorList = doorListFor(target);
 
     DarkFortArt.render(canvas, target.spec);
     drawMap();
@@ -1240,7 +1233,7 @@
 
   /* ── chrome (masthead + stat labels) ──────────────────── */
   function applyFortChrome() {
-    $('#mast-title').textContent = 'DARK FORT';
+    const mt = $('#mast-title'); if (mt) mt.textContent = 'DARK FORT';
     $('#stat4-lbl').textContent  = 'ROOMS';
     $('#stat4-max').textContent  = '/12';
     $('#map-label').textContent  = 'DUNGEON MAP';

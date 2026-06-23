@@ -152,7 +152,7 @@
      RENDER / UI
      ════════════════════════════════════════════════════════ */
   function applyChrome() {
-    $('#mast-title').textContent = 'DARK FOREST';
+    const mt = $('#mast-title'); if (mt) mt.textContent = 'DARK FOREST';
     $('#stat4-lbl').textContent = 'RATIONS';
     $('#stat4-max').textContent = '';
     $('#map-label').textContent = 'FOREST MAP';

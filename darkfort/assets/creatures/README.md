@@ -44,6 +44,7 @@ near-white backgrounds knocked out, framed as a parchment-matted plate by the
 renderer). The 10 remaining Dark Forest creatures use procedural art until art
 files are dropped in here.
 
-Non-monster props (peddler, soothsayer, pit trap, faerie trickster, gnomish
-tinkerer) remain procedural for now; the same loader can be pointed at them
-later if you want bespoke art there too.
+Props can also be overridden: drop `peddler.png`, `soothsayer.png` or
+`trap.png` here (the void peddler already uses supplied art). The start
+menu uses `assets/darkfort.jpg` and `assets/darkforest.jpg` as its two
+scene backgrounds.

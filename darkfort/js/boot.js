@@ -18,67 +18,68 @@
 
   window.GameMode = { current: null };
 
+  const GOLD = '#c9a23f', CRIM = '#9e2533';
+
+  // resolve assets relative to this script so depth doesn't matter
+  let ASSET = 'assets/';
+  try {
+    const s = document.currentScript && document.currentScript.src;
+    if (s) ASSET = s.replace(/js\/boot\.js.*$/, 'assets/');
+  } catch (e) {}
+
+  // the start screen uses the two atmospheric scene images
+  let fortBg = null, forestBg = null;
+  function loadMenuArt() {
+    if (typeof Image === 'undefined' || fortBg) return;
+    const onload = () => { if (window.GameMode.current === 'menu') drawMenuSplash(); };
+    fortBg = new Image(); fortBg.onload = onload; fortBg.src = ASSET + 'darkfort.jpg';
+    forestBg = new Image(); forestBg.onload = onload; forestBg.src = ASSET + 'darkforest.jpg';
+  }
+
+  // cover-fit an image into a panel rect (crop to fill, keep aspect)
+  function coverInto(ctx, img, dx, dy, dw, dh) {
+    if (!(img && img.width)) return false;
+    const ar = img.width / img.height, par = dw / dh;
+    let sw, sh, sx, sy;
+    if (ar > par) { sh = img.height; sw = sh * par; sx = (img.width - sw) / 2; sy = 0; }
+    else { sw = img.width; sh = sw / par; sx = 0; sy = (img.height - sh) / 2; }
+    ctx.drawImage(img, sx, sy, sw, sh, dx, dy, dw, dh);
+    return true;
+  }
+
   function drawMenuSplash() {
     const canvas = $('#room-canvas');
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
     const W = canvas.width, H = canvas.height;
-    ctx.fillStyle = '#0a0a08';
-    ctx.fillRect(0, 0, W, H);
 
-    // left half — the catacomb (skull), right half — the forest (moon + trees)
-    const C = (window.DarkFortArt && window.DarkFortArt.COL) || { yellow: '#ffe600', pink: '#ff2079' };
+    // base
+    ctx.fillStyle = '#0b0a09'; ctx.fillRect(0, 0, W, H);
 
-    // dividing slash
-    ctx.strokeStyle = C.pink; ctx.lineWidth = 6;
-    ctx.beginPath(); ctx.moveTo(W * 0.52, 0); ctx.lineTo(W * 0.48, H); ctx.stroke();
+    // the two atmospheric scenes, cover-fit into each half
+    if (!coverInto(ctx, fortBg, 0, 0, W / 2, H)) { ctx.fillStyle = '#17120d'; ctx.fillRect(0, 0, W / 2, H); }
+    if (!coverInto(ctx, forestBg, W / 2, 0, W / 2, H)) { ctx.fillStyle = '#0e150e'; ctx.fillRect(W / 2, 0, W / 2, H); }
 
-    // LEFT: skull on a torn plate (reuse the art engine if ready)
-    try {
-      if (window.DarkFortArt) {
-        // a smaller skull, left-of-centre
-        ctx.save();
-        ctx.beginPath(); ctx.rect(0, 0, W * 0.5, H); ctx.clip();
-        // grime
-        ctx.fillStyle = 'rgba(255,230,0,0.05)';
-        for (let i = 0; i < 40; i++) ctx.fillRect(Math.random() * W * 0.5, Math.random() * H, 2, 2);
-        ctx.restore();
-      }
-    } catch (e) {}
+    // darken slightly + tint each side for mood and legibility
+    ctx.fillStyle = 'rgba(8,6,4,0.28)'; ctx.fillRect(0, 0, W / 2, H);
+    ctx.fillStyle = 'rgba(6,10,6,0.24)'; ctx.fillRect(W / 2, 0, W / 2, H);
 
-    // RIGHT: a crude pine + moon
-    ctx.fillStyle = '#16241a';
-    ctx.fillRect(W * 0.52, 0, W * 0.48, H);
-    ctx.fillStyle = 'rgba(255,230,0,0.85)';
-    ctx.beginPath(); ctx.arc(W * 0.78, H * 0.28, 46, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = '#16241a';
-    ctx.beginPath(); ctx.arc(W * 0.80, H * 0.25, 42, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = '#0c1810';
-    for (let i = 0; i < 6; i++) {
-      const x = W * 0.58 + i * (W * 0.07);
-      const h = 120 + (i % 3) * 70;
-      ctx.beginPath();
-      for (let k = 0; k < 3; k++) {
-        const ty = H - 40 - k * h * 0.28;
-        const w = (h * 0.3) * (1 - k * 0.2);
-        ctx.moveTo(x - w, ty); ctx.lineTo(x, ty - h * 0.36); ctx.lineTo(x + w, ty);
-      }
-      ctx.fill();
-    }
+    // divider
+    ctx.strokeStyle = CRIM; ctx.lineWidth = 4;
+    ctx.beginPath(); ctx.moveTo(W * 0.505, 0); ctx.lineTo(W * 0.495, H); ctx.stroke();
 
-    // skull glyph on the left (drawn directly so it shows even before PNG loads)
-    drawMenuSkull(ctx, W * 0.25, H * 0.42, 120);
+    // bottom fade for legible titles
+    const bg = ctx.createLinearGradient(0, H * 0.62, 0, H);
+    bg.addColorStop(0, 'rgba(0,0,0,0)'); bg.addColorStop(1, 'rgba(0,0,0,0.88)');
+    ctx.fillStyle = bg; ctx.fillRect(0, H * 0.62, W, H * 0.38);
 
-    // headings
     ctx.textAlign = 'center';
-    ctx.fillStyle = C.yellow;
-    ctx.font = "bold 30px Anton, sans-serif";
-    ctx.fillText('DARK FORT', W * 0.25, H - 60);
-    ctx.fillText('DARK FOREST', W * 0.76, H - 60);
-    ctx.fillStyle = C.pink;
-    ctx.font = "bold 16px Anton, sans-serif";
-    ctx.fillText('THE CATACOMB', W * 0.25, H - 36);
-    ctx.fillText('THE DEEP WOODS', W * 0.76, H - 36);
+    ctx.fillStyle = GOLD; ctx.font = 'bold 34px Anton, sans-serif';
+    ctx.fillText('DARK FORT', W * 0.25, H - 52);
+    ctx.fillText('DARK FOREST', W * 0.75, H - 52);
+    ctx.fillStyle = CRIM; ctx.font = 'bold 15px Anton, sans-serif';
+    ctx.fillText('THE CATACOMB', W * 0.25, H - 30);
+    ctx.fillText('THE DEEP WOODS', W * 0.75, H - 30);
   }
 
   function drawMenuSkull(ctx, x, y, r) {
@@ -104,7 +105,8 @@
   function showMenu() {
     window.GameMode.current = 'menu';
     document.body.classList.remove('forest');
-    $('#mast-title').textContent = 'MÖRK BORG';
+    const mt = $('#mast-title'); if (mt) mt.textContent = 'MÖRK BORG';
+    loadMenuArt();
     $('#stat4-lbl').textContent = '—';
     $('#stat4-max').textContent = '';
     $('#map-label').textContent = 'CHOOSE YOUR DOOM';
