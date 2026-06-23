@@ -604,6 +604,7 @@
   /* ── main scene render ────────────────────────────────── */
   function renderHex(canvas, spec) {
     const ctx = canvas.getContext('2d');
+    if (Ink.setRedraw) Ink.setRedraw(() => renderHex(canvas, spec));
     const W = canvas.width, H = canvas.height;
     const rnd = mulberry32((spec.seed || 1) >>> 0);
     drawTerrain(ctx, W, H, spec.terrain, rnd);
@@ -613,11 +614,16 @@
     if (enc.kind === 'monster') {
       const tough = enc.tough;
       halo(ctx, cx, cy + 30, 200, tough ? 'rgba(160,24,24,0.30)' : 'rgba(108,255,74,0.18)');
-      ctx.fillStyle = 'rgba(0,0,0,0.35)';
-      ctx.beginPath(); ctx.ellipse(cx, cy + 130, 96, 20, 0, 0, Math.PI * 2); ctx.fill();
-      ctx.save(); ctx.translate(cx, cy + 24); ctx.scale(1.3, 1.3); ctx.translate(-cx, -(cy + 24));
-      (CREATURES[enc.art] || drawWolf)(ctx, cx, cy + 24, rnd);
-      ctx.restore();
+      const rec = Ink.creatureImage && Ink.creatureImage(enc.art);
+      if (rec && rec.ready) {
+        Ink.drawCreatureImage(ctx, rec, cx, cy + 20, H * 0.7);
+      } else {
+        ctx.fillStyle = 'rgba(0,0,0,0.35)';
+        ctx.beginPath(); ctx.ellipse(cx, cy + 130, 96, 20, 0, 0, Math.PI * 2); ctx.fill();
+        ctx.save(); ctx.translate(cx, cy + 24); ctx.scale(1.3, 1.3); ctx.translate(-cx, -(cy + 24));
+        (CREATURES[enc.art] || drawWolf)(ctx, cx, cy + 24, rnd);
+        ctx.restore();
+      }
     } else if (enc.kind === 'trickster') {
       drawTrickster(ctx, cx, cy + 10, rnd);
     } else if (enc.kind === 'tinkerer') {

@@ -205,6 +205,7 @@
   /* ── main render ──────────────────────────────────────── */
   function render(canvas, spec) {
     lastDraw = () => render(canvas, spec);
+    if (Ink.setRedraw) Ink.setRedraw(lastDraw);
     const ctx = canvas.getContext('2d');
     const W = canvas.width, H = canvas.height;
     const rnd = mulberry32(spec.seed || 1);
@@ -572,6 +573,12 @@
     const key = (monster && monster.art) || 'skeleton';
     halo(ctx, cx, cy, 190, monster && monster.tough
         ? 'rgba(160,24,24,0.30)' : 'rgba(255,32,121,0.16)');
+    // a supplied illustration (assets/creatures/<key>.png) wins
+    const rec = Ink.creatureImage && Ink.creatureImage(key);
+    if (rec && rec.ready) {
+      Ink.drawCreatureImage(ctx, rec, cx, cy, Math.min(ctx.canvas.width, ctx.canvas.height) * 0.7);
+      return;
+    }
     // ground shadow (drawn under the figure)
     ctx.fillStyle = 'rgba(0,0,0,0.35)';
     ctx.beginPath();

@@ -196,8 +196,52 @@
     return (c) => { c.ellipse(cx, cy, rx, ry, rot || 0, 0, Math.PI * 2); };
   }
 
+  /* ── drop-in creature illustrations ───────────────────────
+     Place a PNG (ideally transparent background) at
+     assets/creatures/<key>.png and it replaces the procedural
+     drawing for that encounter. Until it loads (or if it's
+     absent) the procedural art stands in. Headless renderers
+     have no Image, so they always use the procedural path.    */
+  let ASSET_BASE = 'assets/creatures/';
+  try {
+    const s = (typeof document !== 'undefined') && document.currentScript && document.currentScript.src;
+    if (s) ASSET_BASE = s.replace(/js\/ink\.js.*$/, 'assets/creatures/');
+  } catch (e) {}
+
+  let redraw = null;
+  function setRedraw(fn) { redraw = fn; }
+
+  const _imgs = {};
+  function creatureImage(key) {
+    if (typeof Image === 'undefined') return null;     // headless
+    if (_imgs[key] !== undefined) return _imgs[key];
+    const rec = { ready: false, img: new Image() };
+    rec.img.onload = () => { rec.ready = true; if (redraw) redraw(); };
+    rec.img.onerror = () => { rec.ready = false; };     // missing → procedural
+    rec.img.src = ASSET_BASE + key + '.png';
+    _imgs[key] = rec;
+    return rec;
+  }
+
+  // draw a loaded illustration centred on (cx,cy), fit to maxH
+  function drawCreatureImage(ctx, rec, cx, cy, maxH) {
+    const img = rec && rec.img;
+    if (!img || !img.width) return false;
+    const ar = img.width / img.height;
+    let h = maxH, w = h * ar;
+    const maxW = maxH * 1.15;
+    if (w > maxW) { w = maxW; h = w / ar; }
+    ctx.save();
+    ctx.fillStyle = 'rgba(0,0,0,0.35)';
+    ctx.beginPath(); ctx.ellipse(cx, cy + h * 0.46, w * 0.42, h * 0.06, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+    ctx.drawImage(img, cx - w / 2, cy - h / 2, w, h);
+    return true;
+  }
+
   window.Ink = {
     form, taper, serpent, hatchBox, wobble,
     claw, fang, spike, stipple, eye, ellipseTrace,
+    creatureImage, drawCreatureImage, setRedraw,
   };
 })();
