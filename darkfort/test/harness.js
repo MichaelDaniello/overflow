@@ -83,7 +83,7 @@ sandbox.addEventListener = (ev, fn) => { if (ev === 'DOMContentLoaded') sandbox.
 const windowObj = sandbox;
 vm.createContext(sandbox);
 
-for (const file of ['../js/art.js', '../js/forest-art.js', '../js/game.js', '../js/forest.js', '../js/boot.js']) {
+for (const file of ['../js/ink.js', '../js/art.js', '../js/forest-art.js', '../js/game.js', '../js/forest.js', '../js/boot.js']) {
   const code = fs.readFileSync(path.join(__dirname, file), 'utf8');
   vm.runInContext(code, sandbox, { filename: file });
 }

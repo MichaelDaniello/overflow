@@ -25,6 +25,9 @@
     green:  '#6cff4a',
   };
 
+  const Ink = window.Ink;
+  const HATCH = 'rgba(10,10,8,0.32)';
+
   /* ── real Mörk Borg skull art (ink-on-transparent PNG) ──
      Loaded once; until it arrives the procedural glyph stands
      in. When it finishes we redraw whatever is on screen.    */
@@ -202,6 +205,7 @@
   /* ── main render ──────────────────────────────────────── */
   function render(canvas, spec) {
     lastDraw = () => render(canvas, spec);
+    if (Ink.setRedraw) Ink.setRedraw(lastDraw);
     const ctx = canvas.getContext('2d');
     const W = canvas.width, H = canvas.height;
     const rnd = mulberry32(spec.seed || 1);
@@ -569,6 +573,12 @@
     const key = (monster && monster.art) || 'skeleton';
     halo(ctx, cx, cy, 190, monster && monster.tough
         ? 'rgba(160,24,24,0.30)' : 'rgba(255,32,121,0.16)');
+    // a supplied illustration (assets/creatures/<key>.png) wins
+    const rec = Ink.creatureImage && Ink.creatureImage(key);
+    if (rec && rec.ready) {
+      Ink.drawCreatureImage(ctx, rec, cx, cy, Math.min(ctx.canvas.width, ctx.canvas.height) * 0.7);
+      return;
+    }
     // ground shadow (drawn under the figure)
     ctx.fillStyle = 'rgba(0,0,0,0.35)';
     ctx.beginPath();
@@ -599,228 +609,291 @@
   }
 
   function drawSkeleton(ctx, cx, cy, rnd) {
-    const c = COL.bone;
-    // ribs
-    limb(ctx, cx, cy - 50, cx, cy + 30, 8, c);
-    for (let i = 0; i < 4; i++) {
-      ctx.strokeStyle = c; ctx.lineWidth = 5;
-      ctx.beginPath();
-      ctx.arc(cx, cy - 30 + i * 14, 18, Math.PI * 0.15, Math.PI * 0.85);
-      ctx.stroke();
+    const bone = COL.bone, dk = COL.black;
+    const hatch = { color: 'rgba(40,36,26,0.45)', spacing: 5, angle: 1.2 };
+    // legs (behind the body)
+    Ink.taper(ctx, cx - 7, cy + 36, cx - 20, cy + 62, 7, 5, { fill: bone, stroke: dk, lw: 2 });
+    Ink.taper(ctx, cx - 20, cy + 62, cx - 26, cy + 84, 5, 4, { fill: bone, stroke: dk, lw: 2 });
+    Ink.taper(ctx, cx + 7, cy + 36, cx + 20, cy + 62, 7, 5, { fill: bone, stroke: dk, lw: 2 });
+    Ink.taper(ctx, cx + 20, cy + 62, cx + 26, cy + 84, 5, 4, { fill: bone, stroke: dk, lw: 2 });
+    // pelvis
+    Ink.form(ctx, c => { c.ellipse(cx, cy + 34, 20, 13, 0, 0, Math.PI * 2); },
+      { fill: bone, stroke: dk, lw: 3, rnd, box: { x: cx - 22, y: cy + 21, w: 44, h: 28 }, hatch, shadeFrom: 'rgba(0,0,0,0.55)' });
+    ctx.fillStyle = COL.ink; ctx.beginPath();
+    ctx.moveTo(cx, cy + 30); ctx.lineTo(cx - 9, cy + 44); ctx.lineTo(cx, cy + 40); ctx.lineTo(cx + 9, cy + 44); ctx.closePath(); ctx.fill();
+    // spine
+    Ink.taper(ctx, cx, cy - 40, cx, cy + 32, 5, 8, { fill: bone, stroke: dk, lw: 2 });
+    // dark chest cavity behind the ribs
+    ctx.save(); ctx.fillStyle = 'rgba(0,0,0,0.42)';
+    ctx.beginPath(); ctx.ellipse(cx, cy - 14, 23, 29, 0, 0, Math.PI * 2); ctx.fill(); ctx.restore();
+    // ribcage — filled curved ribs
+    for (let i = 0; i < 5; i++) {
+      const ry = cy - 34 + i * 12, rw = 25 - i * 2;
+      Ink.form(ctx, c => {
+        c.moveTo(cx, ry - 5);
+        c.bezierCurveTo(cx + rw, ry - 7, cx + rw, ry + 9, cx, ry + 7);
+        c.bezierCurveTo(cx - rw, ry + 9, cx - rw, ry - 7, cx, ry - 5);
+      }, { fill: bone, stroke: dk, lw: 2.5, rnd, jitter: 1.4 });
     }
-    // arms with a dagger
-    limb(ctx, cx, cy - 38, cx - 34, cy + 4, 6, c);
-    limb(ctx, cx, cy - 38, cx + 32, cy - 8, 6, c);
-    ctx.strokeStyle = COL.stone; ctx.lineWidth = 4;
-    ctx.beginPath(); ctx.moveTo(cx + 32, cy - 8); ctx.lineTo(cx + 44, cy - 30); ctx.stroke();
-    // legs
-    limb(ctx, cx - 4, cy + 30, cx - 22, cy + 78, 6, c);
-    limb(ctx, cx + 4, cy + 30, cx + 22, cy + 78, 6, c);
-    // real skull for the head
-    drawSkull(ctx, cx, cy - 72, 92, { rnd });
-    // blood drench — kept low and dark so the bones stay readable
-    ctx.fillStyle = COL.blood;
-    splatter(ctx, cx - 4, cy + 60, rnd, COL.blood, 22);
-    splatter(ctx, cx + 18, cy + 30, rnd, COL.blood, 14);
+    // arms
+    Ink.taper(ctx, cx - 6, cy - 36, cx - 30, cy - 6, 5.5, 4, { fill: bone, stroke: dk, lw: 2 });
+    Ink.taper(ctx, cx - 30, cy - 6, cx - 38, cy + 26, 4, 3, { fill: bone, stroke: dk, lw: 2 });
+    Ink.taper(ctx, cx + 6, cy - 36, cx + 30, cy - 14, 5.5, 4, { fill: bone, stroke: dk, lw: 2 });
+    Ink.taper(ctx, cx + 30, cy - 14, cx + 44, cy - 36, 4, 3, { fill: bone, stroke: dk, lw: 2 });
+    // raised rusted dagger
+    ctx.save(); ctx.translate(cx + 44, cy - 36); ctx.rotate(-0.5);
+    ctx.fillStyle = COL.stone; ctx.strokeStyle = dk; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(-3, 6); ctx.lineTo(-4, -30); ctx.lineTo(0, -38); ctx.lineTo(4, -30); ctx.lineTo(3, 6); ctx.closePath(); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = '#6b5a3a'; ctx.fillRect(-7, 6, 14, 5); ctx.restore();
+    // real skull head
+    drawSkull(ctx, cx, cy - 70, 90, { rnd });
+    splatter(ctx, cx - 4, cy + 58, rnd, COL.blood, 20);
+    splatter(ctx, cx + 16, cy + 28, rnd, COL.blood, 12);
   }
 
   function drawCultist(ctx, cx, cy, rnd) {
-    // robe
-    ctx.fillStyle = COL.ink; ctx.strokeStyle = COL.black; ctx.lineWidth = 6;
-    ctx.beginPath();
-    ctx.moveTo(cx, cy - 70);
-    ctx.lineTo(cx + 50, cy + 80); ctx.lineTo(cx - 50, cy + 80);
-    ctx.closePath(); ctx.fill(); ctx.stroke();
-    // hood
-    ctx.fillStyle = COL.black;
-    ctx.beginPath(); ctx.arc(cx, cy - 58, 26, 0, Math.PI * 2); ctx.fill();
-    // pink sigil
-    ctx.strokeStyle = COL.pink; ctx.lineWidth = 4;
-    ctx.beginPath(); ctx.arc(cx, cy + 10, 22, 0, Math.PI * 2); ctx.stroke();
-    ctx.beginPath();
-    ctx.moveTo(cx, cy - 12); ctx.lineTo(cx + 19, cy + 21);
-    ctx.lineTo(cx - 19, cy + 21); ctx.closePath(); ctx.stroke();
-    // glowing eyes
-    ctx.fillStyle = COL.yellow;
-    ctx.beginPath(); ctx.arc(cx - 8, cy - 58, 4, 0, 7); ctx.arc(cx + 8, cy - 58, 4, 0, 7); ctx.fill();
-    // raised dagger arm
-    limb(ctx, cx + 30, cy + 0, cx + 60, cy - 50, 7, COL.ink);
-    ctx.strokeStyle = COL.stone; ctx.lineWidth = 4;
-    ctx.beginPath(); ctx.moveTo(cx + 60, cy - 50); ctx.lineTo(cx + 70, cy - 76); ctx.stroke();
+    const robe = '#15140f', dk = COL.black;
+    // robe silhouette with sleeves and a flared hem
+    Ink.form(ctx, c => {
+      c.moveTo(cx, cy - 60);
+      c.lineTo(cx + 22, cy - 50);
+      c.lineTo(cx + 40, cy + 10);
+      c.lineTo(cx + 30, cy + 16);
+      c.lineTo(cx + 26, cy - 10);
+      c.lineTo(cx + 40, cy + 84);
+      c.quadraticCurveTo(cx, cy + 74, cx - 40, cy + 84);
+      c.lineTo(cx - 26, cy - 10);
+      c.lineTo(cx - 30, cy + 16);
+      c.lineTo(cx - 40, cy + 10);
+      c.lineTo(cx - 22, cy - 50);
+      c.closePath();
+    }, { fill: robe, stroke: dk, lw: 4, rnd, jitter: 2,
+         box: { x: cx - 40, y: cy - 60, w: 80, h: 150 }, hatch: { color: 'rgba(0,0,0,0.5)', spacing: 7, angle: 1.4 } });
+    // fold lines
+    ctx.strokeStyle = 'rgba(0,0,0,0.6)'; ctx.lineWidth = 2;
+    for (let i = -1; i <= 1; i++) { ctx.beginPath(); ctx.moveTo(cx + i * 12, cy - 28); ctx.lineTo(cx + i * 16, cy + 80); ctx.stroke(); }
+    // cowl + void where a face should be
+    ctx.fillStyle = '#0c0b08';
+    ctx.beginPath(); ctx.moveTo(cx - 24, cy - 44); ctx.quadraticCurveTo(cx, cy - 86, cx + 24, cy - 44); ctx.quadraticCurveTo(cx, cy - 40, cx - 24, cy - 44); ctx.fill();
+    ctx.fillStyle = '#040403'; ctx.beginPath(); ctx.ellipse(cx, cy - 52, 16, 20, 0, 0, Math.PI * 2); ctx.fill();
+    Ink.eye(ctx, cx - 7, cy - 52, 2.6, COL.yellow);
+    Ink.eye(ctx, cx + 7, cy - 52, 2.6, COL.yellow);
+    // raised dagger arm + blade
+    Ink.taper(ctx, cx + 24, cy - 20, cx + 52, cy - 54, 6, 4, { fill: robe, stroke: dk, lw: 2 });
+    ctx.save(); ctx.translate(cx + 52, cy - 54); ctx.rotate(-0.7);
+    ctx.fillStyle = COL.stone; ctx.strokeStyle = dk; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(-3, 4); ctx.lineTo(-3, -26); ctx.lineTo(0, -34); ctx.lineTo(3, -26); ctx.lineTo(3, 4); ctx.closePath(); ctx.fill(); ctx.stroke();
+    ctx.restore();
+    // glowing pink sigil
+    ctx.strokeStyle = COL.pink; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.arc(cx, cy + 20, 17, 0, Math.PI * 2); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(cx, cy + 5); ctx.lineTo(cx + 15, cy + 31); ctx.lineTo(cx - 15, cy + 31); ctx.closePath(); ctx.stroke();
   }
 
   function drawGoblin(ctx, cx, cy, rnd) {
-    // squat body
-    ctx.fillStyle = COL.green; ctx.strokeStyle = COL.black; ctx.lineWidth = 5;
-    ctx.beginPath(); ctx.ellipse(cx, cy + 20, 38, 44, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
-    // head
-    ctx.beginPath(); ctx.arc(cx, cy - 36, 26, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
-    // ears
-    ctx.beginPath();
-    ctx.moveTo(cx - 24, cy - 40); ctx.lineTo(cx - 56, cy - 54); ctx.lineTo(cx - 22, cy - 24); ctx.closePath();
-    ctx.moveTo(cx + 24, cy - 40); ctx.lineTo(cx + 56, cy - 54); ctx.lineTo(cx + 22, cy - 24); ctx.closePath();
-    ctx.fill(); ctx.stroke();
-    // eyes + grin
-    ctx.fillStyle = COL.yellow;
-    ctx.beginPath(); ctx.arc(cx - 9, cy - 38, 6, 0, 7); ctx.arc(cx + 9, cy - 38, 6, 0, 7); ctx.fill();
-    ctx.fillStyle = COL.black;
-    ctx.beginPath(); ctx.arc(cx - 9, cy - 37, 2.5, 0, 7); ctx.arc(cx + 9, cy - 37, 2.5, 0, 7); ctx.fill();
-    ctx.strokeStyle = COL.black; ctx.lineWidth = 3;
-    ctx.beginPath(); ctx.moveTo(cx - 12, cy - 22); ctx.lineTo(cx + 12, cy - 22); ctx.stroke();
-    ctx.fillStyle = COL.bone;
-    for (let i = -1; i <= 1; i++) { ctx.beginPath();
-      ctx.moveTo(cx + i*8 - 3, cy - 22); ctx.lineTo(cx + i*8, cy - 14); ctx.lineTo(cx + i*8 + 3, cy - 22);
-      ctx.closePath(); ctx.fill(); }
-    // little legs
-    limb(ctx, cx - 16, cy + 58, cx - 22, cy + 80, 8, COL.green);
-    limb(ctx, cx + 16, cy + 58, cx + 22, cy + 80, 8, COL.green);
+    const skin = '#2f3a22', dk = COL.black;
+    const hatch = { color: HATCH, spacing: 5, angle: 1.1 };
+    // hunched, sinewy torso
+    Ink.form(ctx, c => {
+      c.moveTo(cx - 20, cy - 18);
+      c.quadraticCurveTo(cx - 34, cy + 24, cx - 18, cy + 50);
+      c.quadraticCurveTo(cx, cy + 58, cx + 20, cy + 50);
+      c.quadraticCurveTo(cx + 30, cy + 20, cx + 22, cy - 16);
+      c.quadraticCurveTo(cx, cy - 30, cx - 20, cy - 18);
+    }, { fill: skin, stroke: dk, lw: 3, rnd, box: { x: cx - 34, y: cy - 30, w: 64, h: 88 }, hatch, shadeFrom: 'rgba(0,0,0,0.5)' });
+    // spindly legs
+    Ink.taper(ctx, cx - 12, cy + 48, cx - 18, cy + 82, 6, 4, { fill: skin, stroke: dk, lw: 2 });
+    Ink.taper(ctx, cx + 12, cy + 48, cx + 20, cy + 82, 6, 4, { fill: skin, stroke: dk, lw: 2 });
+    // arms
+    Ink.taper(ctx, cx - 16, cy - 6, cx - 40, cy + 18, 5, 3, { fill: skin, stroke: dk, lw: 2 });
+    Ink.taper(ctx, cx + 16, cy - 8, cx + 42, cy - 22, 5, 3, { fill: skin, stroke: dk, lw: 2 });
+    // jagged knife
+    ctx.save(); ctx.translate(cx + 42, cy - 22); ctx.rotate(-0.4);
+    ctx.fillStyle = COL.stone; ctx.strokeStyle = dk; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(-2, 4); ctx.lineTo(-3, -22); ctx.lineTo(2, -30); ctx.lineTo(3, -20); ctx.lineTo(2, 4); ctx.closePath(); ctx.fill(); ctx.stroke();
+    ctx.restore();
+    // head — big cranium, long hooked nose
+    Ink.form(ctx, c => {
+      c.moveTo(cx - 18, cy - 34);
+      c.quadraticCurveTo(cx - 22, cy - 58, cx + 4, cy - 58);
+      c.quadraticCurveTo(cx + 24, cy - 56, cx + 22, cy - 36);
+      c.lineTo(cx + 30, cy - 30);
+      c.lineTo(cx + 16, cy - 26);
+      c.quadraticCurveTo(cx + 4, cy - 22, cx - 18, cy - 34);
+    }, { fill: skin, stroke: dk, lw: 3, rnd, box: { x: cx - 22, y: cy - 58, w: 54, h: 36 }, hatch });
+    // huge pointed ears
+    ctx.fillStyle = skin; ctx.strokeStyle = dk; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(cx - 16, cy - 44); ctx.lineTo(cx - 46, cy - 58); ctx.lineTo(cx - 14, cy - 34); ctx.closePath(); ctx.fill(); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(cx + 18, cy - 46); ctx.lineTo(cx + 44, cy - 64); ctx.lineTo(cx + 18, cy - 36); ctx.closePath(); ctx.fill(); ctx.stroke();
+    // eyes + fanged grin
+    Ink.eye(ctx, cx - 4, cy - 44, 3, COL.yellow);
+    Ink.eye(ctx, cx + 10, cy - 44, 2.6, COL.yellow);
+    ctx.strokeStyle = dk; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(cx - 12, cy - 30); ctx.lineTo(cx + 8, cy - 29); ctx.stroke();
+    for (let i = 0; i < 3; i++) Ink.fang(ctx, cx - 8 + i * 7, cy - 30, 6, 2, COL.bone);
   }
 
   function drawHound(ctx, cx, cy, rnd) {
-    const c = COL.stone;
-    // body
-    ctx.fillStyle = c; ctx.strokeStyle = COL.black; ctx.lineWidth = 5;
-    ctx.beginPath(); ctx.ellipse(cx, cy + 14, 56, 28, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
-    // head low and forward
-    ctx.beginPath(); ctx.ellipse(cx - 52, cy + 4, 26, 20, -0.2, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
-    // snout
-    ctx.beginPath();
-    ctx.moveTo(cx - 70, cy - 2); ctx.lineTo(cx - 96, cy + 6); ctx.lineTo(cx - 70, cy + 16); ctx.closePath();
-    ctx.fill(); ctx.stroke();
-    // exposed ribs (undead)
-    ctx.strokeStyle = COL.bone; ctx.lineWidth = 3;
-    for (let i = 0; i < 4; i++) { ctx.beginPath();
-      ctx.moveTo(cx - 14 + i*16, cy - 2); ctx.lineTo(cx - 14 + i*16, cy + 30); ctx.stroke(); }
-    // legs
-    limb(ctx, cx - 30, cy + 36, cx - 34, cy + 78, 8, c);
-    limb(ctx, cx + 30, cy + 36, cx + 34, cy + 78, 8, c);
-    limb(ctx, cx - 10, cy + 38, cx - 8, cy + 78, 8, c);
-    limb(ctx, cx + 10, cy + 38, cx + 8, cy + 78, 8, c);
-    // eye + teeth
-    ctx.fillStyle = COL.pink;
-    ctx.beginPath(); ctx.arc(cx - 56, cy - 2, 4, 0, 7); ctx.fill();
-    ctx.fillStyle = COL.bone;
-    ctx.beginPath(); ctx.moveTo(cx - 84, cy + 8); ctx.lineTo(cx - 80, cy + 18); ctx.lineTo(cx - 76, cy + 8); ctx.fill();
+    const c = '#3a352b', dk = COL.black;
+    const hatch = { color: HATCH, spacing: 5, angle: 0.6 };
+    // emaciated, sway-backed body
+    Ink.form(ctx, cc => {
+      cc.moveTo(cx - 44, cy + 6);
+      cc.quadraticCurveTo(cx - 10, cy - 10, cx + 30, cy - 2);
+      cc.quadraticCurveTo(cx + 54, cy + 2, cx + 48, cy + 20);
+      cc.quadraticCurveTo(cx + 10, cy + 30, cx - 30, cy + 26);
+      cc.quadraticCurveTo(cx - 46, cy + 22, cx - 44, cy + 6);
+    }, { fill: c, stroke: dk, lw: 3, rnd, box: { x: cx - 46, y: cy - 12, w: 104, h: 44 }, hatch, shadeFrom: 'rgba(0,0,0,0.45)' });
+    // exposed ribs
+    ctx.strokeStyle = COL.bone; ctx.lineWidth = 2.5; ctx.lineCap = 'round';
+    for (let i = 0; i < 4; i++) { ctx.beginPath(); ctx.moveTo(cx - 2 + i * 12, cy - 2); ctx.quadraticCurveTo(cx + 2 + i * 12, cy + 12, cx - 2 + i * 12, cy + 24); ctx.stroke(); }
+    // haunch
+    Ink.form(ctx, cc => { cc.ellipse(cx + 38, cy + 8, 18, 20, 0, 0, Math.PI * 2); }, { fill: c, stroke: dk, lw: 2.5, rnd });
+    // gaunt legs
+    Ink.taper(ctx, cx - 32, cy + 22, cx - 36, cy + 72, 5, 3, { fill: c, stroke: dk, lw: 2 });
+    Ink.taper(ctx, cx - 12, cy + 24, cx - 10, cy + 72, 5, 3, { fill: c, stroke: dk, lw: 2 });
+    Ink.taper(ctx, cx + 34, cy + 24, cx + 38, cy + 72, 6, 3, { fill: c, stroke: dk, lw: 2 });
+    Ink.taper(ctx, cx + 14, cy + 26, cx + 14, cy + 72, 5, 3, { fill: c, stroke: dk, lw: 2 });
+    // low head + long snout
+    Ink.form(ctx, cc => { cc.ellipse(cx - 50, cy + 8, 20, 15, -0.2, 0, Math.PI * 2); }, { fill: c, stroke: dk, lw: 2.5, rnd });
+    Ink.form(ctx, cc => { cc.moveTo(cx - 62, cy + 2); cc.lineTo(cx - 92, cy + 8); cc.lineTo(cx - 86, cy + 16); cc.lineTo(cx - 62, cy + 16); cc.closePath(); }, { fill: c, stroke: dk, lw: 2.5, rnd });
+    // gaping fanged jaw
+    ctx.fillStyle = COL.blood; ctx.beginPath(); ctx.moveTo(cx - 78, cy + 14); ctx.lineTo(cx - 92, cy + 20); ctx.lineTo(cx - 72, cy + 22); ctx.closePath(); ctx.fill();
+    Ink.fang(ctx, cx - 84, cy + 12, 6, 2, COL.bone); Ink.fang(ctx, cx - 74, cy + 14, 6, 2, COL.bone);
+    // ear + glowing eye
+    ctx.fillStyle = c; ctx.beginPath(); ctx.moveTo(cx - 44, cy - 4); ctx.lineTo(cx - 50, cy - 22); ctx.lineTo(cx - 36, cy - 8); ctx.closePath(); ctx.fill();
+    Ink.eye(ctx, cx - 54, cy + 2, 3, COL.pink);
   }
 
   function drawSorcerer(ctx, cx, cy, rnd) {
-    // tall robe
-    ctx.fillStyle = '#241a30'; ctx.strokeStyle = COL.black; ctx.lineWidth = 6;
-    ctx.beginPath();
-    ctx.moveTo(cx, cy - 86);
-    ctx.lineTo(cx + 52, cy + 86); ctx.lineTo(cx - 52, cy + 86);
-    ctx.closePath(); ctx.fill(); ctx.stroke();
-    // hooded skull face — real skull on a torn paper plate so it reads
-    drawSkull(ctx, cx, cy - 64, 78, { plate: true, rnd });
-    // death-ray staff
-    limb(ctx, cx + 36, cy + 20, cx + 70, cy - 96, 7, '#3a2b4a');
-    ctx.fillStyle = COL.green;
-    halo(ctx, cx + 70, cy - 96, 36, 'rgba(108,255,74,0.6)');
-    ctx.beginPath(); ctx.arc(cx + 70, cy - 96, 11, 0, 7); ctx.fill();
-    // crackling magic
-    ctx.strokeStyle = COL.green; ctx.lineWidth = 3;
-    for (let i = 0; i < 4; i++) {
-      const a = rnd() * Math.PI * 2;
-      ctx.beginPath();
-      ctx.moveTo(cx + 70, cy - 96);
-      ctx.lineTo(cx + 70 + Math.cos(a) * 34, cy - 96 + Math.sin(a) * 34);
-      ctx.stroke();
-    }
+    const robe = '#1b1426', dk = COL.black;
+    Ink.form(ctx, c => {
+      c.moveTo(cx, cy - 78);
+      c.lineTo(cx + 20, cy - 70);
+      c.lineTo(cx + 30, cy - 20);
+      c.lineTo(cx + 54, cy + 86);
+      c.quadraticCurveTo(cx, cy + 74, cx - 54, cy + 86);
+      c.lineTo(cx - 30, cy - 20);
+      c.lineTo(cx - 20, cy - 70);
+      c.closePath();
+    }, { fill: robe, stroke: dk, lw: 4, rnd, jitter: 2,
+         box: { x: cx - 54, y: cy - 78, w: 108, h: 164 }, hatch: { color: 'rgba(0,0,0,0.45)', spacing: 8, angle: 1.5 } });
+    ctx.strokeStyle = 'rgba(0,0,0,0.55)'; ctx.lineWidth = 2;
+    for (let i = -1; i <= 1; i++) { ctx.beginPath(); ctx.moveTo(cx + i * 16, cy - 10); ctx.lineTo(cx + i * 24, cy + 82); ctx.stroke(); }
+    // skeletal arm to the staff
+    Ink.taper(ctx, cx + 28, cy + 10, cx + 50, cy - 30, 6, 4, { fill: robe, stroke: dk, lw: 2 });
+    // death staff + green orb
+    ctx.strokeStyle = '#2a1f38'; ctx.lineWidth = 6; ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(cx + 50, cy + 30); ctx.lineTo(cx + 62, cy - 92); ctx.stroke();
+    Ink.eye(ctx, cx + 62, cy - 92, 9, COL.green);
+    ctx.strokeStyle = COL.green; ctx.lineWidth = 2;
+    for (let i = 0; i < 5; i++) { const a = rnd() * 7; ctx.beginPath(); ctx.moveTo(cx + 62, cy - 92); ctx.lineTo(cx + 62 + Math.cos(a) * 30, cy - 92 + Math.sin(a) * 30); ctx.stroke(); }
+    // cowl + real skull face on a torn plate
+    ctx.fillStyle = '#0c0a12';
+    ctx.beginPath(); ctx.moveTo(cx - 26, cy - 50); ctx.quadraticCurveTo(cx, cy - 94, cx + 26, cy - 50); ctx.quadraticCurveTo(cx, cy - 46, cx - 26, cy - 50); ctx.fill();
+    drawSkull(ctx, cx, cy - 58, 70, { plate: true, rnd });
   }
 
   function drawTroll(ctx, cx, cy, rnd) {
-    const c = COL.stoneD;
-    // bulky body
-    ctx.fillStyle = c; ctx.strokeStyle = COL.black; ctx.lineWidth = 7; ctx.lineJoin = 'round';
-    ctx.beginPath();
-    ctx.moveTo(cx - 50, cy - 30);
-    ctx.lineTo(cx + 50, cy - 30);
-    ctx.lineTo(cx + 60, cy + 70);
-    ctx.lineTo(cx - 60, cy + 70);
-    ctx.closePath(); ctx.fill(); ctx.stroke();
-    // head sunk into shoulders
-    ctx.beginPath(); ctx.arc(cx, cy - 50, 30, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
-    // cracks (stone)
-    ctx.strokeStyle = COL.black; ctx.lineWidth = 2;
-    ctx.beginPath(); ctx.moveTo(cx - 20, cy - 60); ctx.lineTo(cx - 6, cy - 40); ctx.lineTo(cx - 16, cy - 20); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(cx + 24, cy - 10); ctx.lineTo(cx + 10, cy + 30); ctx.stroke();
-    // glowing eyes
-    ctx.fillStyle = COL.yellow;
-    ctx.beginPath(); ctx.arc(cx - 11, cy - 52, 5, 0, 7); ctx.arc(cx + 11, cy - 52, 5, 0, 7); ctx.fill();
-    // huge arms
-    limb(ctx, cx - 46, cy - 18, cx - 78, cy + 50, 16, c);
-    limb(ctx, cx + 46, cy - 18, cx + 80, cy + 40, 16, c);
-    // club
-    ctx.strokeStyle = '#6b5a3a'; ctx.lineWidth = 12; ctx.lineCap = 'round';
-    ctx.beginPath(); ctx.moveTo(cx + 80, cy + 40); ctx.lineTo(cx + 104, cy - 30); ctx.stroke();
+    const stone = '#56544c', dark = '#34322c', dk = COL.black;
+    // tall, jagged stone body — sharp shards, low jitter so facets stay crisp
+    const body = (c) => {
+      c.moveTo(cx - 34, cy - 44); c.lineTo(cx - 10, cy - 58); c.lineTo(cx + 6, cy - 46);
+      c.lineTo(cx + 28, cy - 60); c.lineTo(cx + 46, cy - 34); c.lineTo(cx + 36, cy - 4);
+      c.lineTo(cx + 54, cy + 78); c.lineTo(cx + 18, cy + 62); c.lineTo(cx + 2, cy + 80);
+      c.lineTo(cx - 22, cy + 62); c.lineTo(cx - 50, cy + 78); c.lineTo(cx - 38, cy - 6); c.closePath();
+    };
+    Ink.form(ctx, body, { fill: stone, stroke: dk, lw: 5, rnd, jitter: 1.5,
+      box: { x: cx - 50, y: cy - 60, w: 104, h: 140 }, shadeFrom: 'rgba(0,0,0,0.55)' });
+    // bright catch-light facets (left planes)
+    ctx.fillStyle = 'rgba(255,255,255,0.10)';
+    ctx.beginPath(); ctx.moveTo(cx - 34, cy - 44); ctx.lineTo(cx - 10, cy - 58); ctx.lineTo(cx - 8, cy - 10); ctx.lineTo(cx - 30, cy + 0); ctx.closePath(); ctx.fill();
+    ctx.beginPath(); ctx.moveTo(cx - 38, cy - 6); ctx.lineTo(cx - 18, cy + 10); ctx.lineTo(cx - 22, cy + 62); ctx.lineTo(cx - 50, cy + 78); ctx.closePath(); ctx.fill();
+    // dark facets (right planes)
+    ctx.fillStyle = 'rgba(0,0,0,0.35)';
+    ctx.beginPath(); ctx.moveTo(cx + 6, cy - 46); ctx.lineTo(cx + 28, cy - 60); ctx.lineTo(cx + 46, cy - 34); ctx.lineTo(cx + 36, cy - 4); ctx.lineTo(cx + 10, cy + 6); ctx.closePath(); ctx.fill();
+    ctx.beginPath(); ctx.moveTo(cx + 36, cy - 4); ctx.lineTo(cx + 54, cy + 78); ctx.lineTo(cx + 18, cy + 62); ctx.lineTo(cx + 14, cy + 10); ctx.closePath(); ctx.fill();
+    // cracks
+    ctx.strokeStyle = 'rgba(0,0,0,0.6)'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(cx - 8, cy - 46); ctx.lineTo(cx + 2, cy - 10); ctx.lineTo(cx - 10, cy + 40); ctx.stroke();
+    // mossy black drips
+    ctx.strokeStyle = '#10180a'; ctx.lineWidth = 4; ctx.lineCap = 'round';
+    for (let i = 0; i < 6; i++) { const x = cx - 40 + rnd() * 80; ctx.beginPath(); ctx.moveTo(x, cy - 10 + rnd() * 40); ctx.lineTo(x, cy + 30 + rnd() * 34); ctx.stroke(); }
+    // jagged crown head + deep glowing eyes
+    Ink.form(ctx, c => { c.moveTo(cx - 20, cy - 44); c.lineTo(cx - 12, cy - 78); c.lineTo(cx - 2, cy - 58); c.lineTo(cx + 8, cy - 82); c.lineTo(cx + 18, cy - 56); c.lineTo(cx + 24, cy - 44); c.closePath(); },
+      { fill: dark, stroke: dk, lw: 3, rnd });
+    Ink.eye(ctx, cx - 7, cy - 52, 4, COL.yellow);
+    Ink.eye(ctx, cx + 9, cy - 52, 4, COL.yellow);
+    // massive arms ending in angular rock fists
+    Ink.taper(ctx, cx - 40, cy - 20, cx - 76, cy + 44, 17, 13, { fill: stone, stroke: dk, lw: 4 });
+    Ink.form(ctx, c => { c.moveTo(cx - 92, cy + 42); c.lineTo(cx - 78, cy + 34); c.lineTo(cx - 64, cy + 48); c.lineTo(cx - 72, cy + 64); c.lineTo(cx - 90, cy + 58); c.closePath(); }, { fill: stone, stroke: dk, lw: 3, rnd });
+    Ink.taper(ctx, cx + 42, cy - 20, cx + 80, cy + 38, 17, 13, { fill: stone, stroke: dk, lw: 4 });
+    Ink.form(ctx, c => { c.moveTo(cx + 92, cy + 36); c.lineTo(cx + 78, cy + 28); c.lineTo(cx + 64, cy + 42); c.lineTo(cx + 72, cy + 58); c.lineTo(cx + 92, cy + 52); c.closePath(); }, { fill: stone, stroke: dk, lw: 3, rnd });
   }
 
   function drawMedusa(ctx, cx, cy, rnd) {
-    // torso
-    ctx.fillStyle = '#4c6b3a'; ctx.strokeStyle = COL.black; ctx.lineWidth = 6;
-    ctx.beginPath();
-    ctx.moveTo(cx - 26, cy - 30);
-    ctx.lineTo(cx + 26, cy - 30);
-    ctx.bezierCurveTo(cx + 50, cy + 60, cx - 50, cy + 60, cx - 26, cy - 30);
-    // serpent lower body
-    ctx.fill(); ctx.stroke();
-    ctx.beginPath();
-    ctx.moveTo(cx - 20, cy + 40);
-    ctx.bezierCurveTo(cx - 60, cy + 80, cx + 50, cy + 70, cx + 30, cy + 92);
-    ctx.lineWidth = 22; ctx.strokeStyle = '#4c6b3a'; ctx.lineCap = 'round'; ctx.stroke();
+    const skin = '#6f7a52', scale = '#566042', dk = COL.black;
+    // coiled serpent lower body
+    Ink.serpent(ctx, [[cx - 6, cy + 10], [cx - 30, cy + 34], [cx - 16, cy + 62], [cx + 24, cy + 70], [cx + 44, cy + 50], [cx + 30, cy + 30]],
+      20, 6, { fill: scale, stroke: dk, lw: 3, rnd, box: { x: cx - 40, y: cy + 10, w: 90, h: 70 }, hatch: { color: HATCH, spacing: 5, angle: 0.7 } });
+    // a striking lower serpent maw
+    ctx.fillStyle = scale; ctx.strokeStyle = dk; ctx.lineWidth = 2.5;
+    ctx.beginPath(); ctx.ellipse(cx - 30, cy + 74, 12, 8, 0.4, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = COL.blood; ctx.beginPath(); ctx.moveTo(cx - 40, cy + 72); ctx.lineTo(cx - 54, cy + 78); ctx.lineTo(cx - 40, cy + 82); ctx.closePath(); ctx.fill();
+    Ink.fang(ctx, cx - 44, cy + 72, 5, 1.6, COL.bone);
+    // muscular torso
+    Ink.form(ctx, c => {
+      c.moveTo(cx - 22, cy - 30);
+      c.quadraticCurveTo(cx - 30, cy + 4, cx - 12, cy + 18);
+      c.quadraticCurveTo(cx, cy + 24, cx + 12, cy + 18);
+      c.quadraticCurveTo(cx + 30, cy + 4, cx + 22, cy - 30);
+      c.quadraticCurveTo(cx, cy - 40, cx - 22, cy - 30);
+    }, { fill: skin, stroke: dk, lw: 3, rnd, box: { x: cx - 30, y: cy - 40, w: 60, h: 64 }, hatch: { color: HATCH, spacing: 5, angle: 1.4 }, shadeFrom: 'rgba(0,0,0,0.4)' });
+    ctx.strokeStyle = 'rgba(0,0,0,0.35)'; ctx.lineWidth = 1.5;
+    for (let i = 0; i < 3; i++) { ctx.beginPath(); ctx.moveTo(cx - 10, cy - 14 + i * 12); ctx.quadraticCurveTo(cx, cy - 10 + i * 12, cx + 10, cy - 14 + i * 12); ctx.stroke(); }
+    // arms
+    Ink.taper(ctx, cx - 18, cy - 18, cx - 48, cy - 2, 6, 3, { fill: skin, stroke: dk, lw: 2 });
+    Ink.taper(ctx, cx + 18, cy - 18, cx + 48, cy - 6, 6, 3, { fill: skin, stroke: dk, lw: 2 });
     // head
-    ctx.fillStyle = '#5c7a48';
-    ctx.beginPath(); ctx.arc(cx, cy - 48, 22, 0, Math.PI * 2); ctx.fill();
-    ctx.strokeStyle = COL.black; ctx.lineWidth = 4; ctx.stroke();
-    // snake hair
-    ctx.strokeStyle = COL.green; ctx.lineWidth = 5; ctx.lineCap = 'round';
-    for (let i = 0; i < 9; i++) {
-      const a = (i / 8) * Math.PI - Math.PI;
-      const sx = cx + Math.cos(a) * 20, sy = cy - 48 + Math.sin(a) * 20;
-      ctx.beginPath();
-      ctx.moveTo(sx, sy);
-      ctx.quadraticCurveTo(sx + Math.cos(a) * 34, sy + Math.sin(a) * 34 - 10,
-                           sx + Math.cos(a) * 26 + (rnd()-0.5)*20, sy + Math.sin(a) * 40);
-      ctx.stroke();
+    Ink.form(ctx, c => { c.ellipse(cx, cy - 46, 16, 19, 0, 0, Math.PI * 2); },
+      { fill: skin, stroke: dk, lw: 2.5, rnd, box: { x: cx - 16, y: cy - 64, w: 32, h: 38 }, hatch: { color: HATCH, spacing: 4, angle: 1.2 } });
+    // writhing mass of snake hair
+    for (let i = 0; i < 11; i++) {
+      const a = -Math.PI + (i / 10) * Math.PI;
+      const bx = cx + Math.cos(a) * 14, by = cy - 50 + Math.sin(a) * 14;
+      const ex = bx + Math.cos(a) * (30 + rnd() * 16) + (rnd() - 0.5) * 14;
+      const ey = by + Math.sin(a) * (30 + rnd() * 16) - 6;
+      const mx = (bx + ex) / 2 + (rnd() - 0.5) * 18, my = (by + ey) / 2 - 10;
+      Ink.serpent(ctx, [[bx, by], [mx, my], [ex, ey]], 5, 2, { fill: COL.green, stroke: dk, lw: 1.5, rnd });
+      ctx.fillStyle = COL.green; ctx.beginPath(); ctx.arc(ex, ey, 3, 0, 7); ctx.fill();
+      ctx.fillStyle = COL.pink; ctx.fillRect(ex - 1, ey - 1, 2, 2);
     }
-    // glowing eyes
-    ctx.fillStyle = COL.yellow;
-    ctx.beginPath(); ctx.arc(cx - 8, cy - 48, 4, 0, 7); ctx.arc(cx + 8, cy - 48, 4, 0, 7); ctx.fill();
+    Ink.eye(ctx, cx - 6, cy - 48, 3, COL.yellow);
+    Ink.eye(ctx, cx + 6, cy - 48, 3, COL.yellow);
+    ctx.strokeStyle = dk; ctx.lineWidth = 1.6; ctx.beginPath(); ctx.moveTo(cx - 7, cy - 38); ctx.lineTo(cx + 7, cy - 38); ctx.stroke();
   }
 
   function drawBasilisk(ctx, cx, cy, rnd) {
-    const c = '#5a6b2a';
-    // long serpentine body
-    ctx.strokeStyle = c; ctx.lineWidth = 30; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
-    ctx.beginPath();
-    ctx.moveTo(cx - 80, cy + 70);
-    ctx.quadraticCurveTo(cx - 30, cy + 20, cx + 10, cy + 40);
-    ctx.quadraticCurveTo(cx + 60, cy + 60, cx + 50, cy - 10);
-    ctx.stroke();
+    const c = '#4a5a26', dk = COL.black;
+    // serpentine body, thick toward the head
+    Ink.serpent(ctx, [[cx - 86, cy + 72], [cx - 50, cy + 50], [cx - 14, cy + 54], [cx + 18, cy + 40], [cx + 44, cy + 8], [cx + 50, cy - 18]],
+      8, 20, { fill: c, stroke: dk, lw: 3, rnd, box: { x: cx - 86, y: cy + 0, w: 140, h: 78 }, hatch: { color: HATCH, spacing: 5, angle: 0.5 }, shadeFrom: 'rgba(0,0,0,0.45)' });
+    // clawed legs
+    Ink.taper(ctx, cx - 40, cy + 58, cx - 46, cy + 82, 6, 4, { fill: c, stroke: dk, lw: 2 });
+    Ink.taper(ctx, cx + 6, cy + 52, cx + 2, cy + 80, 6, 4, { fill: c, stroke: dk, lw: 2 });
+    Ink.claw(ctx, cx - 46, cy + 82, 8, 0.3, 3, COL.bone);
+    Ink.claw(ctx, cx + 2, cy + 80, 8, -0.1, 3, COL.bone);
+    // back spines
+    [[cx - 80, cy + 66], [cx - 46, cy + 46], [cx - 12, cy + 50], [cx + 20, cy + 36], [cx + 42, cy + 6]]
+      .forEach((p, i) => Ink.spike(ctx, p[0], p[1] - 4, 16 + i * 2, 5, 0, COL.bone));
     // head
-    ctx.fillStyle = c; ctx.strokeStyle = COL.black; ctx.lineWidth = 5;
-    ctx.beginPath(); ctx.ellipse(cx + 50, cy - 36, 30, 24, -0.3, 0, Math.PI*2); ctx.fill(); ctx.stroke();
-    // jaw open
-    ctx.fillStyle = COL.blood;
-    ctx.beginPath();
-    ctx.moveTo(cx + 72, cy - 44); ctx.lineTo(cx + 100, cy - 50); ctx.lineTo(cx + 96, cy - 28); ctx.closePath();
-    ctx.fill();
-    ctx.fillStyle = COL.bone;
-    ctx.beginPath(); ctx.moveTo(cx + 78, cy - 44); ctx.lineTo(cx + 84, cy - 36); ctx.lineTo(cx + 90, cy - 44); ctx.fill();
-    // back spikes
-    ctx.fillStyle = COL.bone;
-    for (let i = 0; i < 6; i++) {
-      const t = i / 6;
-      const x = cx - 80 + t * 130, y = cy + 64 - t * 20 - Math.sin(t*3)*14;
-      ctx.beginPath();
-      ctx.moveTo(x - 6, y); ctx.lineTo(x, y - 22); ctx.lineTo(x + 6, y); ctx.closePath(); ctx.fill();
-    }
+    Ink.form(ctx, cc => { cc.ellipse(cx + 52, cy - 30, 28, 22, -0.3, 0, Math.PI * 2); },
+      { fill: c, stroke: dk, lw: 3, rnd, box: { x: cx + 24, y: cy - 52, w: 56, h: 44 }, hatch: { color: HATCH, spacing: 4, angle: 1 } });
+    // gaping fanged maw
+    ctx.fillStyle = COL.blood; ctx.beginPath(); ctx.moveTo(cx + 70, cy - 40); ctx.lineTo(cx + 102, cy - 46); ctx.lineTo(cx + 96, cy - 22); ctx.lineTo(cx + 74, cy - 26); ctx.closePath(); ctx.fill();
+    Ink.fang(ctx, cx + 80, cy - 40, 8, 2.4, COL.bone); Ink.fang(ctx, cx + 90, cy - 40, 8, 2.4, COL.bone);
     // petrifying eye
-    halo(ctx, cx + 44, cy - 40, 26, 'rgba(255,230,0,0.5)');
-    ctx.fillStyle = COL.yellow;
-    ctx.beginPath(); ctx.arc(cx + 44, cy - 40, 7, 0, 7); ctx.fill();
-    ctx.fillStyle = COL.black;
-    ctx.beginPath(); ctx.arc(cx + 44, cy - 40, 3, 0, 7); ctx.fill();
+    Ink.eye(ctx, cx + 44, cy - 36, 5, COL.yellow);
+    ctx.fillStyle = dk; ctx.beginPath(); ctx.arc(cx + 44, cy - 36, 2.4, 0, 7); ctx.fill();
   }
 
   /* ── title splash (for the start screen) ──────────────── */
