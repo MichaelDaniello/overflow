@@ -119,7 +119,9 @@
     $('#stat-pack').innerHTML = '<i>choose a game</i>';
 
     drawMenuSplash();
-    $('#scene-caption').textContent = 'CHOOSE YOUR DOOM';
+    // the menu art carries its own titles — hide the scene caption so it
+    // doesn't overlap them (the games re-show it via setCaption)
+    const cap = $('#scene-caption'); if (cap) { cap.textContent = ''; cap.style.display = 'none'; }
     $('#dice-tray').innerHTML = '';
     const mc = $('#map-canvas');
     if (mc) { const c = mc.getContext('2d'); mc.width = 640; mc.height = 120; c.fillStyle = '#0a0a08'; c.fillRect(0, 0, 640, 120); }

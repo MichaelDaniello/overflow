@@ -203,7 +203,7 @@
       diceTray.appendChild(node);
     });
   }
-  function setCaption(t) { caption.textContent = t; }
+  function setCaption(t) { caption.textContent = t; caption.style.display = ''; }
 
   function setActions(list) {
     actionBox.innerHTML = '';
