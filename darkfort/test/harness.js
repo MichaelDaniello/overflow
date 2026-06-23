@@ -110,7 +110,11 @@ const labelCounts = {}, titleCounts = {};
 // start menu, so we let the random action picker drive from there.
 let restarts = 0;
 
-while (steps < 600000) {
+// Bound wall-clock time: a random bot that rarely dies can explore an
+// enormous dungeon, making per-action map redraws quadratic. We only care
+// about catching crashes, so cap runtime — any error surfaces early.
+const T0 = Date.now();
+while (steps < 600000 && Date.now() - T0 < 120000) {
   steps++;
   const ovTitle = reg('#overlay-title')._text;
   if (ovTitle === 'YOU DIED') deaths++;
