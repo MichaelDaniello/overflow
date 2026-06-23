@@ -1,62 +1,55 @@
 const { createCanvas, loadImage } = require('canvas');
 const fs = require('fs'), path = require('path'), vm = require('vm');
 
-// load art.js in a sandbox that exposes window
+// load the art engines in a sandbox that exposes window
 const sandbox = { Math, console, Object };
 sandbox.window = sandbox; sandbox.globalThis = sandbox;
 vm.createContext(sandbox);
-vm.runInContext(fs.readFileSync(path.join(__dirname,'../js/art.js'),'utf8'), sandbox, {filename:'art.js'});
+for (const f of ['../js/ink.js', '../js/art.js', '../js/forest-art.js'])
+  vm.runInContext(fs.readFileSync(path.join(__dirname, f), 'utf8'), sandbox, { filename: f });
 const Art = sandbox.DarkFortArt;
+const Forest = sandbox.DarkForestArt;
 
 (async () => {
-const skull = await loadImage(path.join(__dirname,'../assets/skull.png'));
-Art.setSkull(skull);
-main();
+  const skull = await loadImage(path.join(__dirname, '../assets/skull.png'));
+  Art.setSkull(skull);
+  main();
 })();
 
-function main() {
-
-const shapes = ['Irregular cave','Oval','Cross-shaped','Corridor','Square','Round','Rectangular','Triangular','Skull-shaped'];
-const encs = [
-  {kind:'monster',monster:{art:'skeleton',tough:false}},
-  {kind:'monster',monster:{art:'cultist',tough:false}},
-  {kind:'monster',monster:{art:'goblin',tough:false}},
-  {kind:'monster',monster:{art:'hound',tough:false}},
-  {kind:'monster',monster:{art:'sorcerer',tough:true}},
-  {kind:'monster',monster:{art:'troll',tough:true}},
-  {kind:'monster',monster:{art:'medusa',tough:true}},
-  {kind:'monster',monster:{art:'basilisk',tough:true}},
-  {kind:'peddler'},{kind:'soothsayer'},{kind:'trap'},{kind:'item',item:'Potion'},
-];
-
-function tile(spec, w=320){
-  const c = createCanvas(640,640);
-  Art.render(c, spec);
-  return c;
-}
-
-// Gallery 1: every room shape (with 2 doors + a skeleton so doors/encounter show)
-function gallery(items, cols, file, label){
-  const cell=320, pad=8;
-  const rows=Math.ceil(items.length/cols);
-  const W=cols*cell+(cols+1)*pad, H=rows*cell+(rows+1)*pad+30;
-  const g=createCanvas(W,H); const gx=g.getContext('2d');
-  gx.fillStyle='#0a0a08'; gx.fillRect(0,0,W,H);
-  items.forEach((it,i)=>{
-    const c=tile(it.spec);
-    const x=pad+(i%cols)*(cell+pad), y=pad+Math.floor(i/cols)*(cell+pad);
-    gx.drawImage(c,x,y,cell,cell);
-    gx.fillStyle='#ffe600'; gx.font='bold 16px sans-serif'; gx.fillText(it.label,x+6,y+cell-8);
+function sheet(items, cols, render, file) {
+  const cell = 320, pad = 8;
+  const rows = Math.ceil(items.length / cols);
+  const W = cols * cell + (cols + 1) * pad, H = rows * cell + (rows + 1) * pad;
+  const g = createCanvas(W, H); const gx = g.getContext('2d');
+  gx.fillStyle = '#0a0a08'; gx.fillRect(0, 0, W, H);
+  items.forEach((it, i) => {
+    const c = createCanvas(640, 640);
+    render(c, it);
+    const x = pad + (i % cols) * (cell + pad), y = pad + Math.floor(i / cols) * (cell + pad);
+    gx.drawImage(c, x, y, cell, cell);
+    gx.fillStyle = '#ffe600'; gx.font = 'bold 16px sans-serif'; gx.fillText(it.label, x + 6, y + cell - 8);
   });
-  fs.writeFileSync(path.join(__dirname,file), g.toBuffer('image/png'));
-  console.log('wrote',file);
+  fs.writeFileSync(path.join(__dirname, file), g.toBuffer('image/png'));
+  console.log('wrote', file);
 }
 
-gallery(shapes.map((sh,i)=>({label:sh,spec:{seed:i*97+3,shape:sh,doors:2,encounter:{kind:'monster',monster:{art:'skeleton'}}}})),3,'gallery-shapes.png');
-gallery(encs.map((e,i)=>({label:(e.monster?e.monster.art:e.kind),spec:{seed:i*53+11,shape:'Square',doors:2,encounter:e}})),4,'gallery-encounters.png');
+function main() {
+  const fortEnc = [
+    { art: 'skeleton', tough: false }, { art: 'cultist', tough: false },
+    { art: 'goblin', tough: false }, { art: 'hound', tough: false },
+    { art: 'sorcerer', tough: true }, { art: 'troll', tough: true },
+    { art: 'medusa', tough: true }, { art: 'basilisk', tough: true },
+  ];
+  sheet(fortEnc.map((m, i) => ({ label: m.art, m, i })), 4,
+    (c, it) => Art.render(c, { seed: it.i * 53 + 11, shape: 'Square', doors: 2, encounter: { kind: 'monster', monster: it.m } }),
+    'gallery-encounters.png');
 
-// a title splash
-const t=createCanvas(640,640); Art.renderTitle(t);
-fs.writeFileSync(path.join(__dirname,'title.png'), t.toBuffer('image/png'));
-console.log('wrote title.png');
+  const forestMon = ['wolf', 'bear', 'wildman', 'bandit', 'spiders', 'griffon', 'druid', 'zombie', 'plant', 'wyvern', 'giant'];
+  sheet(forestMon.map((art, i) => ({ label: art, art, i })), 4,
+    (c, it) => Forest.renderHex(c, { seed: it.i * 41 + 7, terrain: it.i % 2 ? 'Deep forest' : 'Crags', encounter: { kind: 'monster', art: it.art, tough: it.i > 4 } }),
+    'gallery-forest.png');
+
+  const t = createCanvas(640, 640); Art.renderTitle(t);
+  fs.writeFileSync(path.join(__dirname, 'title.png'), t.toBuffer('image/png'));
+  console.log('wrote title.png');
 }
