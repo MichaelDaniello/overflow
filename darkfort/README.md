@@ -92,10 +92,13 @@ the art; the game in the browser uses the native canvas and needs nothing.
 
 ## Art credit
 
-The skull (`assets/skull.png`, used on the title, the skeleton, the
-necro-sorcerer and the death screen) is the original ink illustration from the
-official Dark Fort sheet. Everything else on the canvas — the room shapes,
-doors, other monsters and props — is generated procedurally at runtime.
+The skull (`assets/skull.png`) is the original ink illustration from the
+official Dark Fort sheet. The encounter illustrations in `assets/creatures/`
+(all eight Dark Fort monsters and the Dark Forest fungal zombie) are art
+supplied by the repository owner, framed as bestiary plates by the renderer.
+Any creature without a supplied illustration — and all room shapes, doors,
+hex terrains and props — is generated procedurally at runtime; drop a
+`assets/creatures/<key>.png` to override one (see that folder's README).
 
 ---
 

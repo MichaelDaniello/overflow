@@ -213,8 +213,8 @@
 
   const _imgs = {};
   function creatureImage(key) {
-    if (typeof Image === 'undefined') return null;     // headless
-    if (_imgs[key] !== undefined) return _imgs[key];
+    if (_imgs[key] !== undefined) return _imgs[key];   // cached (incl. preloaded)
+    if (typeof Image === 'undefined') return null;      // headless
     const rec = { ready: false, img: new Image() };
     rec.img.onload = () => { rec.ready = true; if (redraw) redraw(); };
     rec.img.onerror = () => { rec.ready = false; };     // missing → procedural
@@ -222,26 +222,41 @@
     _imgs[key] = rec;
     return rec;
   }
+  // offline renderers (node-canvas) inject decoded images directly
+  function preload(key, img) { _imgs[key] = { ready: true, img: img }; }
 
-  // draw a loaded illustration centred on (cx,cy), fit to maxH
+  // draw a supplied illustration as a matted "bestiary plate" centred
+  // on (cx,cy), fit to maxH. A parchment mat sits behind it so the dark
+  // ink art (and any knocked-out background) reads on the dark scene.
   function drawCreatureImage(ctx, rec, cx, cy, maxH) {
     const img = rec && rec.img;
     if (!img || !img.width) return false;
     const ar = img.width / img.height;
     let h = maxH, w = h * ar;
-    const maxW = maxH * 1.15;
+    const maxW = maxH * 1.05;
     if (w > maxW) { w = maxW; h = w / ar; }
+    const x = cx - w / 2, y = cy - h / 2;
+    const b = Math.max(6, Math.round(h * 0.024));   // mat width
     ctx.save();
-    ctx.fillStyle = 'rgba(0,0,0,0.35)';
-    ctx.beginPath(); ctx.ellipse(cx, cy + h * 0.46, w * 0.42, h * 0.06, 0, 0, Math.PI * 2); ctx.fill();
+    // drop shadow
+    ctx.fillStyle = 'rgba(0,0,0,0.55)';
+    ctx.fillRect(x - b + 8, y - b + 10, w + 2 * b, h + 2 * b);
+    // parchment mat (shows through knocked-out areas)
+    ctx.fillStyle = '#cdc5ab';
+    ctx.fillRect(x - b, y - b, w + 2 * b, h + 2 * b);
+    // the illustration
+    ctx.drawImage(img, x, y, w, h);
+    // ink border
+    const lw = Math.max(2, Math.round(b * 0.55));
+    ctx.lineWidth = lw; ctx.strokeStyle = '#0c0b08';
+    ctx.strokeRect(x - b + lw / 2, y - b + lw / 2, w + 2 * b - lw, h + 2 * b - lw);
     ctx.restore();
-    ctx.drawImage(img, cx - w / 2, cy - h / 2, w, h);
     return true;
   }
 
   window.Ink = {
     form, taper, serpent, hatchBox, wobble,
     claw, fang, spike, stipple, eye, ellipseTrace,
-    creatureImage, drawCreatureImage, setRedraw,
+    creatureImage, drawCreatureImage, preload, setRedraw,
   };
 })();

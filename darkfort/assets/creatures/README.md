@@ -14,14 +14,14 @@ show as a pale rectangle — cut it out to transparent.)
 ### DARK FORT — catacomb monsters
 | file | creature | tier | status |
 |------|----------|------|--------|
-| `skeleton.png` | Blood-Drenched Skeleton | weak | procedural |
-| `cultist.png`  | Catacomb Cultist        | weak | procedural |
-| `goblin.png`   | Goblin                  | weak | procedural |
-| `hound.png`    | Undead Hound            | weak | procedural |
-| `sorcerer.png` | Necro-Sorcerer          | tough | procedural |
-| `troll.png`    | Small Stone Troll       | tough | **art provided — needs upload** |
-| `medusa.png`   | Medusa                  | tough | **art provided — needs upload** |
-| `basilisk.png` | Ruin Basilisk           | tough | procedural |
+| `skeleton.png` | Blood-Drenched Skeleton | weak | ✅ illustration |
+| `cultist.png`  | Catacomb Cultist        | weak | ✅ illustration |
+| `goblin.png`   | Goblin                  | weak | ✅ illustration |
+| `hound.png`    | Undead Hound            | weak | ✅ illustration |
+| `sorcerer.png` | Necro-Sorcerer          | tough | ✅ illustration |
+| `troll.png`    | Small Stone Troll       | tough | ✅ illustration |
+| `medusa.png`   | Medusa                  | tough | ✅ illustration |
+| `basilisk.png` | Ruin Basilisk           | tough | ✅ illustration |
 
 ### DARK FOREST — wilderness creatures
 | file | creature | tier | status |
@@ -33,14 +33,16 @@ show as a pale rectangle — cut it out to transparent.)
 | `spiders.png` | Spider Swarm      | weak | procedural |
 | `griffon.png` | Griffon           | tough | procedural |
 | `druid.png`   | Druid             | tough | procedural |
-| `zombie.png`  | Fungal Zombie     | tough | **art provided — needs upload** |
+| `zombie.png`  | Fungal Zombie     | tough | ✅ illustration |
 | `plant.png`   | Carnivorous Plant | tough | procedural |
 | `wyvern.png`  | Wyvern            | tough | procedural |
 | `giant.png`   | Blood Giant       | tough | procedural |
 
-The three "art provided" rows map to the images shared in chat
-(tombstone-headed undead → `zombie.png`, the medusa → `medusa.png`, the rock
-golem → `troll.png`). They still need to be added here as PNG **files**.
+All 8 Dark Fort monsters plus the Dark Forest Fungal Zombie now use supplied
+illustrations (processed from the source art in `../` — converted to PNG,
+near-white backgrounds knocked out, framed as a parchment-matted plate by the
+renderer). The 10 remaining Dark Forest creatures use procedural art until art
+files are dropped in here.
 
 Non-monster props (peddler, soothsayer, pit trap, faerie trickster, gnomish
 tinkerer) remain procedural for now; the same loader can be pointed at them

@@ -13,6 +13,13 @@ const Forest = sandbox.DarkForestArt;
 (async () => {
   const skull = await loadImage(path.join(__dirname, '../assets/skull.png'));
   Art.setSkull(skull);
+  // preload any supplied creature illustrations so the gallery shows them
+  const Ink = sandbox.Ink;
+  const dir = path.join(__dirname, '../assets/creatures');
+  for (const f of fs.readdirSync(dir).filter((n) => n.endsWith('.png'))) {
+    const img = await loadImage(path.join(dir, f));
+    Ink.preload(path.basename(f, '.png'), img);
+  }
   main();
 })();
 
