@@ -332,6 +332,8 @@
         '',
         '  <span class="highlight">darkfort</span>    Boot DARK FORT // a Mörk Borg dungeon crawl',
         '              <span class="dim">aliases: game, play</span>',
+        '  <span class="highlight">blacklog</span>    Boot BLACK LOG // solo pirate-horror campaign cockpit',
+        '              <span class="dim">alias: log</span>',
         '',
         '  <span class="highlight">─── FILESYSTEM ───</span>',
         '',
@@ -442,6 +444,26 @@
 
     game: { hidden: true, desc: 'alias: darkfort', run: (a) => COMMANDS.darkfort.run(a) },
     play: { hidden: true, desc: 'alias: darkfort', run: (a) => COMMANDS.darkfort.run(a) },
+
+    blacklog: {
+      desc: 'Boot BLACK LOG // solo pirate-horror campaign cockpit',
+      run: () => {
+        setTimeout(() => { window.location.href = 'blacklog/dist/index.html'; }, 900);
+        return [
+          '',
+          '  <span class="magenta">─── LOADING CARTRIDGE: BLACK_LOG.rom ───</span>',
+          '',
+          '  <span class="dim">mounting local hold (IndexedDB)........</span> <span class="success">OK</span>',
+          '  <span class="dim">winding threat clocks..................</span> <span class="success">OK</span>',
+          '  <span class="dim">consulting the oracle..................</span> <span class="orange">YES, BUT</span>',
+          '  <span class="dim">salting the bilge......................</span> <span class="success">OK</span>',
+          '',
+          '  <span class="highlight">HOIST THE BLACK LOG.</span> The sea is asking for a name...',
+          '',
+        ];
+      },
+    },
+    log: { hidden: true, desc: 'alias: blacklog', run: (a) => COMMANDS.blacklog.run(a) },
 
     pwd: {
       desc: 'Print working directory',
