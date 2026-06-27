@@ -1,0 +1,6 @@
+node_modules
+*.local
+.DS_Store
+.vite
+# NOTE: dist/ is intentionally committed so GitHub Pages can serve the
+# built app with no CI build step.
